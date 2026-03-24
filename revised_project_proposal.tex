@@ -1,0 +1,330 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\title{Project Proposal: Comparing Function Approximation Methods\\and State Representations for Snake}
+\author{
+    Kiran Sairam Bethi Balagangadaran\\
+    NEU ID: 002031062\\
+    CS 5180: Reinforcement Learning and Sequential Decision Making
+}
+\date{February 23, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Problem Description}
+
+This project investigates how different state representations interact with function approximation methods in reinforcement learning, using the classic game Snake as a testbed. The agent controls a snake on a discrete grid, navigating to eat food while avoiding collisions with walls and its own body.
+
+The central question is: \emph{given state representations of varying complexity, how do hand-crafted linear features, automatically constructed tile-coded features, and neural network-learned features compare in their ability to learn effective control policies via on-policy temporal-difference learning?}
+
+\subsection{Formal MDP Formulation}
+
+\textbf{States:} The state representation is a central focus of this project. I will implement and compare three representations of increasing complexity:
+
+\begin{enumerate}
+    \item \textbf{Compact feature-based ($\sim$11 dimensions):} A small set of binary/categorical features encoding the relative direction to food (up, down, left, right), immediate danger in each direction (wall or body one step away), and current movement direction. This representation follows the design used in several prior Snake RL implementations \citep{loeber2020snakeai, zhou2023snake} and yields a low-dimensional feature vector where even tabular methods may suffice.
+
+    \item \textbf{Local neighborhood ($\sim$100+ dimensions):} A $5 \times 5$ grid window centered on the snake's head, encoding whether each cell is empty, food, wall, or body (one-hot per cell), augmented with food direction indicators and a discretized snake length. This gives the agent local spatial awareness but results in a significantly larger feature space that challenges tabular methods.
+
+    \item \textbf{Extended features ($\sim$150+ dimensions):} A richer feature set combining the local neighborhood with continuous-valued features: Manhattan distance to food, distance to nearest body segment in each cardinal direction, normalized snake length, and the proportion of reachable empty cells (a rough measure of self-trapping risk). This provides the most information but creates a high-dimensional, mixed discrete-continuous feature space where function approximation is essential.
+\end{enumerate}
+
+\textbf{Actions:} $\mathcal{A} = \{\text{STRAIGHT}, \text{LEFT}, \text{RIGHT}\}$ relative to the current heading (3 actions, since reversing is instant death and can be excluded).
+
+\textbf{Rewards:}
+\begin{itemize}[nosep]
+    \item $+10$ for eating food
+    \item $-10$ for dying (hitting wall or own body)
+    \item $-0.1$ per step (small penalty to encourage efficient paths and discourage loops)
+\end{itemize}
+
+The step penalty and food reward magnitudes follow the conventions used in most prior Snake RL work \citep{wei2018autonomous, jiang2021snakeai}. I will briefly analyze the sensitivity of learned behavior to the step penalty magnitude. The reward structure satisfies the conditions for potential-based shaping: the step penalty can be interpreted as a potential function that does not alter the optimal policy \citep{ng1999reward}.
+
+\textbf{Discount factor:} $\gamma = 0.95$.
+
+\textbf{Environment:} I will implement a custom Snake environment from scratch in Python on a $20 \times 20$ grid. The environment will follow a Gymnasium-style interface (\texttt{reset()}, \texttt{step()}) for consistency \citep{gymnasium}. The game is episodic, with each episode ending when the snake dies or exceeds a maximum step count (to prevent infinite loops). Building the environment from scratch ensures full control over state representation and reward shaping.
+
+\subsection{Why This Problem is Interesting}
+
+Snake presents several properties that make it a compelling testbed for studying function approximation in RL:
+
+\begin{itemize}[nosep]
+    \item The effective state space grows as the snake gets longer, meaning the difficulty increases within an episode---tabular methods face an inherently non-stationary effective state space.
+    \item There is a tension between short-term rewards (go straight to food) and long-term survival (don't trap yourself). Ma et al.\ showed that optimal Snake play involves NP-hard self-avoiding walk subproblems \citep{ma2016snake}.
+    \item The three state representations span a range from trivially small (where even tabular methods work) to high-dimensional (where function approximation is necessary), allowing a controlled study of when and why approximation helps.
+\end{itemize}
+
+\subsection{Prior Work and Positioning}
+
+Snake has been studied with a range of RL methods. Wei et al.\ \citep{wei2018autonomous} applied DQN with CNN processing of raw pixel frames. Bonnici et al.\ \citep{bonnici2022exploring} compared Q-learning, SARSA, PPO, and A* across vector, CNN, and raycasting representations, finding PPO with raycasting performed best. Sebastianelli et al.\ \citep{sebastianelli2021deep} showed that a sensor-based 11-value state representation with a fully connected network trains far more easily than CNN-based approaches. Jiang and Mai \citep{jiang2021snakeai} compared an 11-boolean feature vector against 60$\times$60 grayscale screenshots, finding the compact features achieved sevenfold higher scores. Liang et al.\ \citep{liang2016shallow} demonstrated more broadly that hand-crafted features with \emph{linear} function approximation can match DQN performance even on Atari games.
+
+However, no prior work has systematically compared \emph{function approximation methods}---specifically hand-crafted linear features, tile coding, and small neural networks---across multiple state representations for Snake using a common on-policy TD framework. Most existing studies use off-policy DQN and focus on the deep learning side. This project fills that gap by isolating the function approximation method as the primary independent variable under controlled on-policy semi-gradient SARSA, with state representation complexity as the secondary variable.
+
+\section{Algorithms}
+
+Following the linear function approximation framework covered in class \citep{sutton2018reinforcement}, I will implement and compare three function approximation approaches for on-policy TD control, applied across all three state representations. All three methods use \textbf{semi-gradient SARSA} as the underlying control algorithm, differing only in how the action-value function $\hat{q}(s,a)$ is approximated. This isolates the function approximation method as the sole experimental variable within each state representation.
+
+\textbf{Why on-policy SARSA:} The choice of on-policy SARSA is deliberate and theoretically motivated. Tsitsiklis and Van Roy \citep{tsitsiklis1997analysis} proved that TD learning with linear function approximation converges with probability 1 under on-policy sampling, with bounded approximation error. Off-policy methods with function approximation can diverge even in simple cases \citep{baird1995residual}. This instability arises from the \emph{deadly triad}: the combination of function approximation, bootstrapping, and off-policy learning \citep{sutton2018reinforcement, vanhasselt2018deadly}. By using on-policy SARSA, I avoid one leg of the triad entirely for the linear methods, providing a stable baseline against which to measure neural network instability. The neural network variant retains two legs of the triad (function approximation + bootstrapping) but avoids the third (off-policy), making any observed instability attributable to nonlinear approximation rather than distributional mismatch.
+
+\subsection{Algorithm 1: Semi-Gradient SARSA with Hand-Crafted Linear Features}
+
+The action-value function is approximated as a linear combination of features:
+\begin{equation}
+    \hat{q}(s, a; \mathbf{w}) = \mathbf{w}^\top \mathbf{x}(s, a)
+\end{equation}
+where $\mathbf{x}(s, a) \in \mathbb{R}^d$ is a feature vector constructed from the state representation and $\mathbf{w} \in \mathbb{R}^d$ is a learned weight vector. The weight update follows the semi-gradient SARSA rule:
+\begin{equation}
+    \mathbf{w} \leftarrow \mathbf{w} + \alpha \left[ R_{t+1} + \gamma \hat{q}(S_{t+1}, A_{t+1}; \mathbf{w}) - \hat{q}(S_t, A_t; \mathbf{w}) \right] \mathbf{x}(S_t, A_t)
+\end{equation}
+since $\nabla_{\mathbf{w}} \hat{q}(S, A; \mathbf{w}) = \mathbf{x}(S, A)$ for the linear case.
+
+A key part of this work is the \emph{feature engineering} for each representation:
+\begin{itemize}[nosep]
+    \item \textbf{Compact:} The raw 11-dimensional binary vector is used directly, with per-action weight vectors (i.e., $\mathbf{x}(s,a)$ is a one-hot action indicator tensored with the state features, yielding $3 \times 11 = 33$ weights).
+    \item \textbf{Local neighborhood:} Each cell in the $5 \times 5$ window is one-hot encoded (4 categories: empty, food, wall, body), concatenated with food direction and length bucket indicators. I will also test adding pairwise interaction features between adjacent cells to capture local spatial patterns.
+    \item \textbf{Extended:} The full feature set includes the local neighborhood encoding plus continuous features (distances, length, reachability fraction). Continuous features will be normalized to $[0, 1]$. I will analyze whether adding polynomial interaction terms (degree 2) between key features improves the linear model.
+\end{itemize}
+
+The learned weight vectors will be analyzed post-training to identify which features contribute most to the value function, providing interpretability that the neural network lacks.
+
+\subsection{Algorithm 2: Semi-Gradient SARSA with Tile Coding}
+
+Tile coding \citep{sutton2018reinforcement, sherstov2005tilecoding} provides an automatic method for constructing binary feature vectors from continuous or discrete state variables. Multiple overlapping tilings partition the state space, and the feature vector $\mathbf{x}(s,a)$ is a binary vector with one active feature per tiling. The value function remains linear in these features:
+\begin{equation}
+    \hat{q}(s, a; \mathbf{w}) = \mathbf{w}^\top \mathbf{x}_{\text{tile}}(s, a) = \sum_{i=1}^{n} w_i \cdot \mathbb{1}[\text{tile}_i \text{ is active}]
+\end{equation}
+The update rule is identical to the hand-crafted linear case, with the tile-coded feature vector substituted.
+
+Tile coding is particularly well-suited for the extended representation, which includes continuous-valued distance features that are difficult to hand-engineer effective linear features for. I will use $n = 8$ tilings with tile widths chosen relative to the feature ranges, following the guidelines in Sherstov and Stone \citep{sherstov2005tilecoding}. Sutton's Tiles3 library will be used for the implementation.
+
+Tile coding serves as a middle ground: the features are still linear (preserving convergence guarantees) but automatically constructed (removing the burden of manual feature engineering). This directly tests whether the hand-crafted features in Algorithm 1 are capturing the right structure, or whether automatic feature construction finds a better basis.
+
+\subsection{Algorithm 3: Semi-Gradient SARSA with a Neural Network}
+
+The action-value function is approximated by a small multi-layer perceptron (MLP):
+\begin{equation}
+    \hat{q}(s, a; \boldsymbol{\theta}) = f_{\boldsymbol{\theta}}(\mathbf{x}(s))_a
+\end{equation}
+where $f_{\boldsymbol{\theta}}: \mathbb{R}^d \to \mathbb{R}^{|\mathcal{A}|}$ is a neural network that takes the state representation as input and outputs Q-values for all three actions simultaneously. The architecture is a single hidden layer with 128 units and ReLU activation:
+\begin{equation}
+    f_{\boldsymbol{\theta}}(\mathbf{x}) = \mathbf{W}_2 \cdot \text{ReLU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2
+\end{equation}
+The semi-gradient SARSA update becomes:
+\begin{equation}
+    \boldsymbol{\theta} \leftarrow \boldsymbol{\theta} + \alpha \left[ R_{t+1} + \gamma f_{\boldsymbol{\theta}}(\mathbf{x}(S_{t+1}))_{A_{t+1}} - f_{\boldsymbol{\theta}}(\mathbf{x}(S_t))_{A_t} \right] \nabla_{\boldsymbol{\theta}} f_{\boldsymbol{\theta}}(\mathbf{x}(S_t))_{A_t}
+\end{equation}
+where the gradient is computed via backpropagation.
+
+This architecture is deliberately simple to isolate the effect of nonlinear function approximation. The network can learn feature interactions automatically (e.g., that ``danger ahead + food ahead'' requires a different value than either feature alone), whereas the linear models cannot without explicit interaction terms. The key question is whether this flexibility helps, and at what cost in sample efficiency and stability.
+
+\textbf{Implementation details:} The MLP will be implemented in PyTorch. Training will use Adam \citep{kingma2015adam} with a learning rate of $10^{-3}$. I will start with pure semi-gradient updates (no replay, no target network) to maintain the closest comparison with the linear methods. If training instability arises---which the deadly triad analysis predicts is possible even with on-policy updates when using nonlinear approximation---I will add a target network (updated every $C = 100$ episodes) and note the additional complexity required. This progression itself provides data: \emph{if the neural network requires stabilization techniques that the linear methods do not, that is a meaningful finding about the cost of nonlinear approximation.}
+
+\subsection{Tabular Demonstration (Motivation)}
+
+To motivate the need for function approximation, I will briefly run tabular Q-learning on all three state representations. The expected result is that tabular methods work adequately on the compact representation but fail to converge on the richer representations due to state space explosion. This is included as a motivating experiment, not as a primary algorithm.
+
+\subsection{Baselines}
+
+\begin{itemize}[nosep]
+    \item \textbf{Random policy:} Uniform random action selection (lower bound on performance).
+    \item \textbf{Greedy heuristic:} A hand-coded policy that always moves toward food while avoiding immediate danger (upper reference point). This represents what a simple rule-based agent can achieve without learning.
+\end{itemize}
+
+\subsection{Exploration and Hyperparameters}
+
+All three algorithms use $\varepsilon$-greedy exploration with a decaying schedule ($\varepsilon$ decaying linearly from 1.0 to 0.01 over the first 80\% of training episodes). Hyperparameter tuning will follow a systematic approach:
+\begin{itemize}[nosep]
+    \item \textbf{Linear FA:} Learning rate $\alpha$ selected via grid search over $\{10^{-2}, 10^{-3}, 10^{-4}\}$.
+    \item \textbf{Tile coding:} Number of tilings $n \in \{4, 8, 16\}$; learning rate $\alpha / n$ following the standard tile coding convention \citep{sutton2018reinforcement}; tile widths tuned per representation.
+    \item \textbf{Neural network:} Learning rate for Adam over $\{10^{-3}, 10^{-4}\}$; hidden layer size $\in \{64, 128\}$.
+\end{itemize}
+Each configuration will be run for a fixed budget of 10,000 episodes, with the best hyperparameters selected based on average score over the final 1,000 episodes across 5 random seeds.
+
+\section{Expected Results}
+
+\textbf{Primary experiments} (3 algorithms $\times$ 3 representations = 9 configurations, plus tabular demonstration and baselines):
+
+\begin{itemize}[nosep]
+    \item \textbf{Learning curves:} Average score (food eaten) per episode over training, averaged across 5 independent runs with 95\% confidence bands.
+    \item \textbf{Convergence speed:} Episodes needed to reach 90\% of final performance for each configuration.
+    \item \textbf{Final performance:} Average score of the converged policy (mean over last 1,000 episodes), compared against baselines.
+    \item \textbf{Training stability:} Variance of returns across runs, measuring reliability of each method.
+\end{itemize}
+
+\textbf{Analysis:}
+
+\begin{itemize}
+    \item \textbf{Representation $\times$ approximation interaction:} How does the gap between linear, tile-coded, and neural network performance change across the three representations? Based on prior work \citep{liang2016shallow, elfwing2018sigmoid, jiang2021snakeai}, I hypothesize that the hand-crafted linear model performs comparably to the MLP on the compact representation (where features are already well-designed) but falls behind on richer representations where nonlinear feature interactions matter. I expect tile coding to bridge this gap partially on the extended representation by automatically constructing a richer feature basis from the continuous-valued components.
+
+    \item \textbf{Stability analysis:} Following the deadly triad framework \citep{sutton2018reinforcement, vanhasselt2018deadly}, I will compare training stability (return variance, divergence frequency) across methods. Linear SARSA should be provably stable; the neural network may exhibit instability even under on-policy updates. If so, I will quantify how much stabilization (target networks, etc.) is needed and at what computational cost.
+
+    \item \textbf{Feature importance and interpretability:} For the hand-crafted linear model, I will analyze learned weight magnitudes to identify which features contribute most to the value function. This provides interpretability that neither tile coding nor the neural network offers directly. I will test whether adding degree-2 polynomial interaction terms to the linear model closes the gap with the neural network.
+
+    \item \textbf{Tabular vs.\ function approximation:} Demonstrating where tabular methods break down and function approximation becomes necessary, providing the motivating narrative for the project.
+
+    \item \textbf{Qualitative behavior:} Visualizations of the trained agent playing Snake under each configuration, highlighting behavioral differences (e.g., does the linear agent get trapped more often? Does the MLP learn to ``look ahead'' more effectively?).
+\end{itemize}
+
+\textbf{Risks and mitigation:}
+
+\begin{itemize}
+    \item The neural network may be unstable with semi-gradient updates. If this occurs, I will add a target network (updated every $C$ episodes) or a small experience replay buffer and note the additional complexity. This mirrors the progression from basic TD to DQN \citep{mnih2015dqn} and is itself an informative result.
+    \item Tile coding hyperparameters (tile width, number of tilings) are known to be sensitive \citep{sherstov2005tilecoding}. I will conduct a focused sweep and report performance across the parameter range.
+    \item Training time may be long for the richer representations. I will profile wall-clock time early and reduce grid size (e.g., to $10 \times 10$) if training a single configuration exceeds 30 minutes.
+    \item If 10,000 episodes proves insufficient for convergence on richer representations, I will extend to 50,000 for those specific configurations and note the sample efficiency difference.
+\end{itemize}
+
+\bibliographystyle{plainnat}
+\begin{thebibliography}{20}
+
+% === Core textbook and TD foundations ===
+
+\bibitem[\protect\citeauthoryear{Sutton and Barto}{2018}]{sutton2018reinforcement}
+Sutton, R.~S. and Barto, A.~G. (2018).
+\newblock \emph{Reinforcement Learning: An Introduction} (2nd ed.).
+\newblock MIT Press.
+
+\bibitem[\protect\citeauthoryear{Watkins and Dayan}{1992}]{watkins1992qlearning}
+Watkins, C.~J. C.~H. and Dayan, P. (1992).
+\newblock Q-learning.
+\newblock \emph{Machine Learning}, 8(3):279--292.
+
+\bibitem[\protect\citeauthoryear{Rummery and Niranjan}{1994}]{rummery1994sarsa}
+Rummery, G.~A. and Niranjan, M. (1994).
+\newblock On-line Q-learning using connectionist systems.
+\newblock Technical Report CUED/F-INFENG/TR 166, Cambridge University Engineering Department.
+
+% === Convergence theory and the deadly triad ===
+
+\bibitem[\protect\citeauthoryear{Tsitsiklis and Van~Roy}{1997}]{tsitsiklis1997analysis}
+Tsitsiklis, J.~N. and Van~Roy, B. (1997).
+\newblock An analysis of temporal-difference learning with function approximation.
+\newblock \emph{IEEE Transactions on Automatic Control}, 42(5):674--690.
+
+\bibitem[\protect\citeauthoryear{Singh et~al.}{2000}]{singh2000convergence}
+Singh, S., Jaakkola, T., Littman, M.~L., and Szepesv\'{a}ri, C. (2000).
+\newblock Convergence results for single-step on-policy reinforcement-learning algorithms.
+\newblock \emph{Machine Learning}, 38(3):287--308.
+
+\bibitem[\protect\citeauthoryear{Baird}{1995}]{baird1995residual}
+Baird, L. (1995).
+\newblock Residual algorithms: Reinforcement learning with function approximation.
+\newblock In \emph{Proceedings of the 12th International Conference on Machine Learning (ICML)}, pp.\ 30--37.
+
+\bibitem[\protect\citeauthoryear{van Hasselt et~al.}{2018}]{vanhasselt2018deadly}
+van Hasselt, H., Doron, Y., Strub, F., Hessel, M., Sonnerat, N., and Modayil, J. (2018).
+\newblock Deep reinforcement learning and the deadly triad.
+\newblock \emph{arXiv preprint arXiv:1812.02648}.
+
+% === Tile coding ===
+
+\bibitem[\protect\citeauthoryear{Sherstov and Stone}{2005}]{sherstov2005tilecoding}
+Sherstov, A.~A. and Stone, P. (2005).
+\newblock Function approximation via tile coding: Automating parameter choice.
+\newblock In \emph{Proceedings of the 6th International Symposium on Abstraction, Reformulation and Approximation (SARA)}, Springer LNAI 3607, pp.\ 194--205.
+
+\bibitem[\protect\citeauthoryear{Sutton}{1996}]{sutton1996coarsecoding}
+Sutton, R.~S. (1996).
+\newblock Generalization in reinforcement learning: Successful examples using sparse coarse coding.
+\newblock In \emph{Advances in Neural Information Processing Systems 8 (NeurIPS)}, pp.\ 1038--1044.
+
+% === Neural network FA history ===
+
+\bibitem[\protect\citeauthoryear{Tesauro}{1995}]{tesauro1995tdgammon}
+Tesauro, G. (1995).
+\newblock Temporal difference learning and TD-Gammon.
+\newblock \emph{Communications of the ACM}, 38(3):58--68.
+
+\bibitem[\protect\citeauthoryear{Riedmiller}{2005}]{riedmiller2005nfq}
+Riedmiller, M. (2005).
+\newblock Neural fitted Q iteration -- first experiences.
+\newblock In \emph{Proceedings of the 16th European Conference on Machine Learning (ECML)}, Springer LNAI 3720, pp.\ 317--328.
+
+\bibitem[\protect\citeauthoryear{Mnih et~al.}{2015}]{mnih2015dqn}
+Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A.~A., Veness, J., Bellemare, M.~G., Graves, A., Riedmiller, M., Fidjeland, A.~K., Ostrovski, G., et~al. (2015).
+\newblock Human-level control through deep reinforcement learning.
+\newblock \emph{Nature}, 518(7540):529--533.
+
+\bibitem[\protect\citeauthoryear{Kingma and Ba}{2015}]{kingma2015adam}
+Kingma, D.~P. and Ba, J. (2015).
+\newblock Adam: A method for stochastic optimization.
+\newblock In \emph{Proceedings of the 3rd International Conference on Learning Representations (ICLR)}.
+
+% === State representation and linear vs NN comparisons ===
+
+\bibitem[\protect\citeauthoryear{Liang et~al.}{2016}]{liang2016shallow}
+Liang, Y., Machado, M.~C., Talvitie, E., and Bowling, M. (2016).
+\newblock State of the art control of Atari games using shallow reinforcement learning.
+\newblock In \emph{Proceedings of the 15th International Conference on Autonomous Agents and Multi-Agent Systems (AAMAS)}, pp.\ 485--493.
+
+\bibitem[\protect\citeauthoryear{Elfwing et~al.}{2018}]{elfwing2018sigmoid}
+Elfwing, S., Uchibe, E., and Doya, K. (2018).
+\newblock Sigmoid-weighted linear units for neural network function approximation in reinforcement learning.
+\newblock \emph{Neural Networks}, 107:3--11.
+
+\bibitem[\protect\citeauthoryear{Lesort et~al.}{2018}]{lesort2018srl}
+Lesort, T., D\'{i}az-Rodr\'{i}guez, N., Goudou, J.-F., and Filliat, D. (2018).
+\newblock State representation learning for control: An overview.
+\newblock \emph{Neural Networks}, 108:379--392.
+
+% === Snake game RL ===
+
+\bibitem[\protect\citeauthoryear{Wei et~al.}{2018}]{wei2018autonomous}
+Wei, L., Wang, Z., Yang, B., and Liu, S. (2018).
+\newblock Autonomous agents in Snake game via deep reinforcement learning.
+\newblock In \emph{Proceedings of the IEEE International Conference on Agents (ICA)}, pp.\ 79--82.
+
+\bibitem[\protect\citeauthoryear{Bonnici et~al.}{2022}]{bonnici2022exploring}
+Bonnici, N., Vassallo, C., and Valentino, G. (2022).
+\newblock Exploring reinforcement learning: A case study applied to the popular Snake game.
+\newblock In \emph{Lecture Notes in Networks and Systems}, vol.\ 382, Springer, pp.\ 155--167.
+
+\bibitem[\protect\citeauthoryear{Ma et~al.}{2016}]{ma2016snake}
+Ma, B., Tang, M., and Zhang, J. (2016).
+\newblock Exploration of reinforcement learning to Snake.
+\newblock Stanford CS229 Project Report.
+
+\bibitem[\protect\citeauthoryear{Jiang and Mai}{2021}]{jiang2021snakeai}
+Jiang, J. and Mai, M. (2021).
+\newblock SnakeAI.
+\newblock Stanford CS230 Project Report.
+
+\bibitem[\protect\citeauthoryear{Sebastianelli et~al.}{2021}]{sebastianelli2021deep}
+Sebastianelli, A., Tipaldi, M., Ullo, S.~L., and Ullo, A. (2021).
+\newblock A deep Q-learning based approach applied to the Snake game.
+\newblock In \emph{Proceedings of the IEEE International Conference on Signal Processing}, pp.\ 1--5.
+
+% === Reward shaping ===
+
+\bibitem[\protect\citeauthoryear{Ng et~al.}{1999}]{ng1999reward}
+Ng, A.~Y., Harada, D., and Russell, S. (1999).
+\newblock Policy invariance under reward transformations: Theory and application to reward shaping.
+\newblock In \emph{Proceedings of the 16th International Conference on Machine Learning (ICML)}, pp.\ 278--287.
+
+% === Open-source implementations ===
+
+\bibitem[\protect\citeauthoryear{Loeber}{2020}]{loeber2020snakeai}
+Loeber, P. (2020).
+\newblock snake-ai-pytorch.
+\newblock GitHub repository: \url{https://github.com/patrickloeber/snake-ai-pytorch}.
+
+\bibitem[\protect\citeauthoryear{Zhou}{2023}]{zhou2023snake}
+Zhou, N. (2023).
+\newblock Teaching an AI to play the Snake game using reinforcement learning.
+\newblock Medium article: \url{https://medium.com/@nancy.q.zhou/teaching-an-ai-to-play-the-snake-game-using-reinforcement-learning-6d2a6e8f3b1c}.
+
+\bibitem[\protect\citeauthoryear{Gymnasium}{2024}]{gymnasium}
+Gymnasium documentation.
+\newblock \url{https://gymnasium.farama.org}.
+
+\end{thebibliography}
+
+\end{document}
