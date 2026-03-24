@@ -77,6 +77,10 @@ def train_sarsa(
             cause=cause,
         )
 
+        # Agent end-of-episode hook (e.g., target network update)
+        if hasattr(agent, "on_episode_end"):
+            agent.on_episode_end()
+
         # Progress reporting
         if print_every > 0 and (episode + 1) % print_every == 0:
             recent_scores = logger.scores[-print_every:]
