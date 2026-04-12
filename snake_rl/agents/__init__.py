@@ -5,5 +5,6 @@ from snake_rl.agents.train import train_sarsa, run_experiment
 
 try:
     from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+    from snake_rl.agents.mlp_sarsa_v2 import MLPSarsaAgentV2
 except ImportError:
     pass
