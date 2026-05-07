@@ -5,6 +5,8 @@
 
 Kiran Sairam Bethi Balagangadaran (NEU ID: 002031062)
 
+**[Read the full paper (PDF)](RL_Project_Paper/RL_Project_Paper_Reworked.pdf)**
+
 ---
 
 ## Overview
@@ -20,6 +22,12 @@ The project compares **three function approximation approaches** — linear func
 ### Why This Matters
 
 Most existing Snake RL work uses off-policy DQN with a single state representation. No prior work has systematically compared function approximation methods across multiple representations under a common on-policy TD framework. This project fills that gap, with theoretical grounding in the convergence guarantees of linear TD methods (Tsitsiklis & Van Roy, 1997) and the deadly triad framework (Sutton & Barto, 2018).
+
+### The best agent in action
+
+![Double DQN + Extended representation](recordings/mlp_sarsa__extended.gif)
+
+*Double DQN with experience replay on the Extended (126d) representation — the strongest configuration (mean score 29.05, max 66).*
 
 ---
 
@@ -483,6 +491,16 @@ Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean s
 | **Linear FA** | 0.80 ± 0.07 | 0.67 ± 0.03 | 3.90 ± 0.98 |
 | **Tile Coding** | 22.69 ± 0.54 | 3.21 ± 0.17 | 1.32 ± 0.03 |
 | **MLP** | 24.26 ± 0.39 | 22.51 ± 0.38 | **29.05 ± 0.32** |
+
+### Visual Summary
+
+![Performance heatmap across algorithms × representations](figures/heatmap.png)
+
+*Heatmap of mean final scores. MLP (Double DQN) dominates every cell; tile coding is competitive only on compact features.*
+
+![Learning curves grouped by representation](figures/comparison_by_representation.png)
+
+*Per-representation learning curves over 20,000 episodes (5 seeds, ±1 std bands).*
 
 ### Key Findings
 

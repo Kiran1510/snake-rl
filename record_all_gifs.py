@@ -44,9 +44,9 @@ WEIGHTS_DIR = "weights"
 RECORDINGS_DIR = "recordings"
 
 
-def record_one_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=300, fps=10):
+def record_one_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=300, fps=10, seed=0):
     """Record a GIF for one agent configuration."""
-    name = weight_name(algo, rep_name)
+    name = weight_name(algo, rep_name, seed=seed)
     ext = ".pt" if algo == "mlp" else ".npz"
     weight_file = os.path.join(WEIGHTS_DIR, f"{name}{ext}")
 
@@ -112,6 +112,8 @@ def main():
                         choices=["linear", "tile", "mlp"])
     parser.add_argument("--rep", type=str, default=None,
                         choices=["compact", "local", "extended"])
+    parser.add_argument("--seed", type=int, default=0,
+                        help="Which seed's weights to load (default: 0)")
     args = parser.parse_args()
 
     algos = [args.algo] if args.algo else (
@@ -125,7 +127,7 @@ def main():
     for algo in algos:
         for rep in reps:
             print(f"\n[{algo} × {rep}] Recording...")
-            success = record_one_gif(algo, rep)
+            success = record_one_gif(algo, rep, seed=args.seed)
             if success:
                 saved += 1
             else:
