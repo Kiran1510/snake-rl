@@ -41,12 +41,13 @@ snake_RL/
 │   │   ├── baselines.py            # Random agent, Greedy heuristic, evaluation utility
 │   │   ├── linear_sarsa.py         # Semi-gradient SARSA with linear function approximation
 │   │   ├── tile_sarsa.py           # Semi-gradient SARSA with tile coding
-│   │   ├── mlp_sarsa.py            # Semi-gradient SARSA with neural network (PyTorch)
-│   │   └── train.py                # Shared SARSA training loop and experiment runner
+│   │   ├── mlp_sarsa.py            # Double DQN with experience replay + target network (PyTorch)
+│   │   └── train.py                # Shared SARSA training loop
 │   └── utils/                      # Experiment infrastructure
 │       ├── __init__.py
 │       ├── experiment.py           # RunLogger, ExperimentConfig, ExperimentResult, persistence
-│       └── plotting.py             # Learning curves, comparisons, final performance charts
+│       ├── plotting.py             # Learning curves, comparisons, heatmap, bar charts
+│       └── save_load.py            # Save/load agent weights (.npz linear/tile, .pt MLP)
 ├── tests/                          # Test suite (~210 tests)
 │   ├── run_tests.py                # Standalone test runner (no pytest dependency)
 │   ├── test_env.py                 # 75 environment tests
@@ -56,6 +57,16 @@ snake_RL/
 │   ├── test_linear_sarsa.py        # 24 linear FA SARSA tests
 │   ├── test_tile_sarsa.py          # 21 tile coding SARSA tests
 │   └── test_mlp_sarsa.py           # 20+ MLP SARSA tests (requires PyTorch)
+├── RL_Project_Paper/               # AAAI-style LaTeX paper (with figures and bib)
+├── results/                        # Saved experiment results (JSON, one per algo×rep)
+├── weights/                        # Saved agent weights (one per seed: .npz / .pt)
+├── figures/                        # Generated plots from `generate_plots.py`
+├── recordings/                     # Saved gameplay GIFs from `record_*.py`
+├── run_experiments.py              # Main experiment runner (3 algos × 3 reps × 5 seeds)
+├── run_tabular_demo.py             # Tabular Q-learning demo (motivates function approximation)
+├── generate_plots.py               # Generates all plots from `results/`
+├── record_gameplay.py              # Watch a single trained agent live, or record a GIF
+├── record_all_gifs.py              # Record gameplay GIFs for every saved agent
 ├── revised_project_proposal.tex    # LaTeX project proposal (approved by Prof. Platt)
 ├── requirements.txt                # Python dependencies
 ├── .gitignore
