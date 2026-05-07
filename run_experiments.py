@@ -6,7 +6,7 @@ Experiment runner.
     3. max_steps_factor=3 (1,200 steps max)
     4. Larger tile hash table (262,144)
     5. Epsilon decay over 80% of training
-    6. Default 20,000 episodes (MLP needs more steps to converge with replay)
+    6. Default 20,000 episodes (DQN needs more steps to converge with replay)
 
 Usage:
     python run_experiments.py                          # all configs
@@ -42,7 +42,7 @@ try:
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
-    print("WARNING: PyTorch not installed. MLP experiments will be skipped.")
+    print("WARNING: PyTorch not installed. DQN experiments will be skipped.")
 
 
 # ============================================================
@@ -189,7 +189,7 @@ def make_agent(algo: str, rep_instance, config: ExperimentConfig, seed: int, env
         return agent
     elif algo == "mlp":
         if not HAS_TORCH:
-            raise ImportError("PyTorch required for MLP agent")
+            raise ImportError("PyTorch required for DQN agent")
         p = config.algo_params
         return DoubleDQNAgent(
             representation=rep_instance,

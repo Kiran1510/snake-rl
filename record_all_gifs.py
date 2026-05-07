@@ -36,7 +36,7 @@ try:
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
-    print("WARNING: PyTorch not installed. MLP GIFs will be skipped.")
+    print("WARNING: PyTorch not installed. DQN GIFs will be skipped.")
 
 GRID_SIZE = 20
 CELL_SIZE = 30

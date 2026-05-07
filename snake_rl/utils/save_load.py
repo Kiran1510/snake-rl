@@ -1,7 +1,7 @@
 """
 Save and load trained agent weights.
 
-Supports all three agent types: Linear FA, Tile Coding, MLP.
+Supports all three agent types: Linear FA, Tile Coding, DQN.
 """
 
 import os
@@ -45,7 +45,7 @@ def save_agent(agent, name: str, directory: str = WEIGHTS_DIR):
             }, filepath)
             print(f"Saved {agent_type} weights to {filepath}")
         except ImportError:
-            print("PyTorch required to save MLP weights")
+            print("PyTorch required to save DQN weights")
 
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
@@ -79,7 +79,7 @@ def load_agent_weights(agent, name: str, directory: str = WEIGHTS_DIR):
             agent.q_net.load_state_dict(checkpoint["q_net"])
             print(f"Loaded {agent_type} weights from {filepath}")
         except ImportError:
-            print("PyTorch required to load MLP weights")
+            print("PyTorch required to load DQN weights")
 
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")

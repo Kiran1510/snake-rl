@@ -8,9 +8,11 @@ implementing .act(obs), .update(...), and .epsilon. It handles:
     - Logging (per-episode metrics via RunLogger)
     - Progress reporting
 
-The same loop is used for linear FA, tile coding, and MLP agents,
-since they all use the semi-gradient SARSA update — only the
-function approximation differs.
+The same loop is used for linear FA, tile coding, and DQN agents.
+Linear FA and tile coding agents do a semi-gradient SARSA update on
+each step; the DQN agent stores the transition and runs a mini-batch
+Double-Q update internally. Only the agent's `.update()` method differs
+— the surrounding loop interface is identical.
 """
 
 import time

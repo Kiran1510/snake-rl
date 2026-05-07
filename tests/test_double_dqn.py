@@ -249,7 +249,7 @@ class TestDoubleDQNLearningSanity:
         early = np.mean(logger.scores[:300])
         late = np.mean(logger.scores[-300:])
         assert late > early, f"Scores should improve: early={early:.2f}, late={late:.2f}"
-        print(f"    [MLP] Early: {early:.2f} → Late: {late:.2f}")
+        print(f"    [DQN] Early: {early:.2f} → Late: {late:.2f}")
 
 
 # ============================================================

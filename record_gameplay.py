@@ -98,9 +98,9 @@ def make_agent(algo, rep_name, weights_dir=WEIGHTS_DIR, name=None):
     """
     Create a fresh agent for the given algo/rep.
 
-    For MLP agents, reads the architecture (hidden_dims) directly from the
-    checkpoint file so v1 (hidden_dim=128) and v2 (hidden_dims=(256,128))
-    weights both load correctly without any flags.
+    For the DQN agent, reads the architecture (hidden_dims) directly from
+    the checkpoint file so any saved architecture loads correctly without
+    any flags.
     """
     rep = REPRESENTATIONS[rep_name]()
 
@@ -121,7 +121,7 @@ def make_agent(algo, rep_name, weights_dir=WEIGHTS_DIR, name=None):
 
     elif algo == "mlp":
         if not HAS_TORCH:
-            raise ImportError("PyTorch required for MLP")
+            raise ImportError("PyTorch required for DQN")
         mlp_name = name or weight_name(algo, rep_name)
         pt_path = os.path.join(weights_dir, f"{mlp_name}.pt")
         if os.path.exists(pt_path):
@@ -392,7 +392,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 examples:
-  # Watch MLP on compact representation
+  # Watch DQN on compact representation
   python record_gameplay.py --watch mlp compact
 
   # Watch a specific seed
