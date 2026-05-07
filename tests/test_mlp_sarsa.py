@@ -34,26 +34,26 @@ from snake_rl.utils.experiment import ExperimentConfig
 class TestQNetwork:
 
     def test_output_shape(self):
-        net = QNetwork(input_dim=11, hidden_dim=64, n_actions=3)
+        net = QNetwork(input_dim=11, hidden_dims=(64,), n_actions=3)
         x = torch.randn(1, 11)
         out = net(x)
         assert out.shape == (1, 3)
 
     def test_batch_forward(self):
-        net = QNetwork(input_dim=11, hidden_dim=128, n_actions=3)
+        net = QNetwork(input_dim=11, hidden_dims=(128,), n_actions=3)
         x = torch.randn(32, 11)
         out = net(x)
         assert out.shape == (32, 3)
 
     def test_different_hidden_dims(self):
         for h in [32, 64, 128, 256]:
-            net = QNetwork(input_dim=109, hidden_dim=h, n_actions=3)
+            net = QNetwork(input_dim=109, hidden_dims=(h,), n_actions=3)
             x = torch.randn(1, 109)
             out = net(x)
             assert out.shape == (1, 3)
 
     def test_param_count(self):
-        net = QNetwork(input_dim=11, hidden_dim=128, n_actions=3)
+        net = QNetwork(input_dim=11, hidden_dims=(128,), n_actions=3)
         n_params = sum(p.numel() for p in net.parameters())
         # 11*128 + 128 + 128*3 + 3 = 1408 + 128 + 384 + 3 = 1923
         assert n_params == 1923
@@ -63,8 +63,8 @@ class TestMLPSarsaAgent:
 
     def test_initialization(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dim=64, seed=42)
-        assert agent.hidden_dim == 64
+        agent = MLPSarsaAgent(rep, hidden_dims=(64,), seed=42)
+        assert agent.hidden_dims == (64,)
         assert agent.gamma == 0.95
         stats = agent.get_weight_stats()
         assert stats["n_params"] > 0
@@ -108,7 +108,8 @@ class TestMLPSarsaAgent:
 
     def test_update_changes_params(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.01, seed=42)
+        # min_buffer_size=1, batch_size=1 so the very first update triggers a gradient step
+        agent = MLPSarsaAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         params_before = [p.data.clone() for p in agent.q_net.parameters()]
@@ -123,7 +124,7 @@ class TestMLPSarsaAgent:
 
     def test_update_terminal(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.01, seed=42)
+        agent = MLPSarsaAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         # Terminal update should not crash
@@ -132,7 +133,7 @@ class TestMLPSarsaAgent:
 
     def test_td_error_tracking(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.001, seed=42)
+        agent = MLPSarsaAgent(rep, alpha=0.001, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         for _ in range(5):
@@ -156,8 +157,10 @@ class TestMLPSarsaAgent:
 
     def test_target_network_update(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, use_target_network=True,
-                               target_update_freq=5, alpha=0.01, seed=42)
+        agent = MLPSarsaAgent(
+            rep, use_target_network=True, target_update_freq=5,
+            alpha=0.01, min_buffer_size=1, batch_size=1, seed=42,
+        )
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         # Do some updates to change q_net params
@@ -184,7 +187,8 @@ class TestMLPSarsaAgent:
 
     def test_train_compact(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dim=64, alpha=0.001, seed=42)
+        agent = MLPSarsaAgent(rep, hidden_dims=(64,), alpha=0.001,
+                              min_buffer_size=32, batch_size=32, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
             algorithm="mlp_sarsa", representation="compact",
@@ -196,7 +200,8 @@ class TestMLPSarsaAgent:
     def test_train_all_representations(self):
         for RepClass in [CompactRepresentation, LocalNeighborhoodRepresentation, ExtendedRepresentation]:
             rep = RepClass()
-            agent = MLPSarsaAgent(rep, hidden_dim=32, alpha=0.001, seed=42)
+            agent = MLPSarsaAgent(rep, hidden_dims=(32,), alpha=0.001,
+                                  min_buffer_size=32, batch_size=32, seed=42)
             env = SnakeEnv(grid_size=10, seed=42)
             config = ExperimentConfig(
                 algorithm="mlp_sarsa", representation="test",
@@ -207,7 +212,7 @@ class TestMLPSarsaAgent:
 
     def test_no_nan_in_params(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.001, seed=42)
+        agent = MLPSarsaAgent(rep, alpha=0.001, min_buffer_size=64, batch_size=64, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
             algorithm="mlp_sarsa", representation="compact",
@@ -220,18 +225,19 @@ class TestMLPSarsaAgent:
 
     def test_repr(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dim=128, seed=42)
+        agent = MLPSarsaAgent(rep, hidden_dims=(128,), seed=42)
         r = repr(agent)
         assert "MLPSarsaAgent" in r
-        assert "hidden=128" in r
+        assert "hidden=(128,)" in r
 
 
 class TestMLPLearningSanity:
 
     def test_training_improves(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dim=64, alpha=0.001,
-                               gamma=0.95, seed=42)
+        # Smaller min_buffer_size so learning starts within the 3000-episode budget
+        agent = MLPSarsaAgent(rep, hidden_dims=(64,), alpha=0.001,
+                              gamma=0.95, min_buffer_size=200, batch_size=32, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
             algorithm="mlp_sarsa", representation="compact",
