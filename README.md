@@ -67,7 +67,7 @@ snake_RL/
 ├── generate_plots.py               # Generates all plots from `results/`
 ├── record_gameplay.py              # Watch a single trained agent live, or record a GIF
 ├── record_all_gifs.py              # Record gameplay GIFs for every saved agent
-├── revised_project_proposal.tex    # LaTeX project proposal (approved by Prof. Platt)
+├── revised_project_proposal.tex    # LaTeX project proposal
 ├── requirements.txt                # Python dependencies
 ├── .gitignore
 └── README.md
