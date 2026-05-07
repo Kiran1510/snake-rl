@@ -471,13 +471,17 @@ Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean s
 |---|---|---|---|
 | **Linear FA** | 0.80 ± 0.07 | 0.67 ± 0.03 | 3.90 ± 0.98 |
 | **Tile Coding** | 22.69 ± 0.54 | 3.21 ± 0.17 | 1.32 ± 0.03 |
-| **MLP** | *in progress* | *in progress* | *in progress* |
+| **MLP** | 24.26 ± 0.39 | 22.51 ± 0.38 | **29.05 ± 0.32** |
 
 ### Key Findings
 
 **Tile coding's performance degrades sharply with dimensionality.** Tile × compact (22.69) outperforms tile × local (3.21) by ~7× and tile × extended (1.32) by ~17×. Hash-based tile coding was designed for low-dimensional continuous spaces; at 109+ dimensions, hash collisions in the fixed-size table (262,144 entries) dominate and generalization breaks down. Extended actually performs *worse* than local despite having more information — more dimensions means more collisions.
 
-**Linear FA benefits from richer representations.** Extended (3.90) is ~5× better than compact (0.80) for linear FA, because the extended representation explicitly encodes interaction terms that a linear model cannot learn on its own. The interaction features (danger × food direction products) are doing real work.
+**MLP is representation-agnostic; tile coding is not.** MLP scores (24.26 / 22.51 / 29.05) are competitive across all three representations. Tile coding's scores collapse monotonically with dimensionality (22.69 → 3.21 → 1.32). The gap is starkest on extended: MLP (29.05) vs tile coding (1.32) — a 22× difference on the same representation.
+
+**MLP variance tightens with richer representations.** Seed-to-seed std narrows from ±0.39 (compact) to ±0.32 (extended) — the richer feature space provides a more stable learning signal for the network.
+
+**Linear FA benefits from richer representations.** Extended (3.90) is ~5× better than compact (0.80) for linear FA, because the extended representation explicitly encodes interaction terms that a linear model cannot learn on its own.
 
 **Linear FA learns danger avoidance reliably.** The learned weights show danger signals at -8.x — the agent strongly avoids collisions. Food-direction weights are smaller and noisier, and under pure greedy evaluation (ε=0) the policy can degenerate into deterministic loops on compact features.
 
