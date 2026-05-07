@@ -1,28 +1,32 @@
 """
-Semi-gradient SARSA with a neural network (MLP) function approximation.
+MLP agent with experience replay and target network.
 
-The action-value function is approximated by a small MLP:
-    q_hat(s; theta) = W2 * ReLU(W1 * x(s) + b1) + b2
+Replaces single-step semi-gradient SARSA with mini-batch Q-learning from a
+replay buffer. Keeps the same training-loop interface (.act, .update,
+.on_episode_end, .epsilon) so it drops into train_sarsa unchanged.
 
-The network takes state features as input and outputs Q-values for
-all 3 actions simultaneously. The semi-gradient SARSA update uses
-backpropagation to compute the gradient:
+    - Replay buffer (default 50k): transitions stored each step;
+      a random mini-batch sampled for every gradient update.
+    - Q-learning TD target: max_a Q_target(s', a).
+    - Target network: hard-copied every target_update_freq episodes.
+    - Configurable depth (default: 256 → 128).
+    - Gradient clipping at 5.0.
 
-    theta <- theta + alpha * [R + gamma * q(S', A') - q(S, A)] * grad_theta q(S, A)
-
-This is deliberately kept simple (one hidden layer, no target network,
-no experience replay by default) to isolate the effect of nonlinear
-function approximation. Stabilization can be added if needed.
-
-Reference: Sutton & Barto (2018), Section 9.7
+Note: experience replay breaks on-policy sampling, eliminating the
+Tsitsiklis & Van Roy (1997) convergence guarantee. The empirical stability
+gains from replay outweigh the theoretical cost for neural-net approximators.
 """
 
+from collections import deque
+import random
 from typing import Optional
+
 import numpy as np
 
 try:
     import torch
     import torch.nn as nn
+    import torch.nn.functional as F
     import torch.optim as optim
     HAS_TORCH = True
 except ImportError:
@@ -31,141 +35,163 @@ except ImportError:
 from snake_rl.representations.features import BaseRepresentation
 
 
-def _check_torch():
-    if not HAS_TORCH:
-        raise ImportError(
-            "PyTorch is required for MLPSarsaAgent. "
-            "Install with: pip install torch"
+class ReplayBuffer:
+    """
+    Circular buffer of (state_feat, action, reward, next_state_feat, terminated).
+
+    Features are pre-extracted at push time so sampling involves no env interaction.
+    """
+
+    def __init__(self, capacity: int = 50_000):
+        self.buffer: deque = deque(maxlen=capacity)
+
+    def push(
+        self,
+        state: np.ndarray,
+        action: int,
+        reward: float,
+        next_state: np.ndarray,
+        terminated: bool,
+    ) -> None:
+        self.buffer.append((state, action, reward, next_state, float(terminated)))
+
+    def sample(self, batch_size: int):
+        batch = random.sample(self.buffer, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        return (
+            np.array(states,      dtype=np.float32),
+            np.array(actions,     dtype=np.int64),
+            np.array(rewards,     dtype=np.float32),
+            np.array(next_states, dtype=np.float32),
+            np.array(dones,       dtype=np.float32),
         )
+
+    def __len__(self) -> int:
+        return len(self.buffer)
 
 
 if HAS_TORCH:
     class QNetwork(nn.Module):
-        """
-        Simple MLP that maps state features to Q-values for all actions.
+        """MLP with configurable depth (1 or 2 hidden layers)."""
 
-        Architecture: input → Linear → ReLU → Linear → output (3 values)
-        """
-
-        def __init__(self, input_dim: int, hidden_dim: int = 128, n_actions: int = 3):
+        def __init__(self, input_dim: int, hidden_dims: tuple = (256, 128), n_actions: int = 3):
             super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Linear(hidden_dim, n_actions),
-            )
+            layers = []
+            prev = input_dim
+            for h in hidden_dims:
+                layers += [nn.Linear(prev, h), nn.ReLU()]
+                prev = h
+            layers.append(nn.Linear(prev, n_actions))
+            self.net = nn.Sequential(*layers)
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
+        def forward(self, x: "torch.Tensor") -> "torch.Tensor":
             return self.net(x)
 
 
     class MLPSarsaAgent:
         """
-        Semi-gradient SARSA agent with neural network function approximation.
+        Q-learning agent with replay buffer and target network.
 
         Parameters
         ----------
         representation : BaseRepresentation
-            Feature extractor (compact, local, or extended).
-        hidden_dim : int
-            Number of units in the hidden layer.
+        hidden_dims : tuple
+            Hidden layer sizes, e.g. (256, 128) or (256,).
         alpha : float
-            Learning rate for Adam optimizer.
+            Adam learning rate.
         gamma : float
             Discount factor.
         epsilon : float
-            Initial exploration rate.
-        use_target_network : bool
-            If True, use a target network updated every `target_update_freq`
-            episodes to stabilize training.
+            Initial ε for ε-greedy exploration (updated externally by train loop).
+        buffer_capacity : int
+            Maximum replay buffer size.
+        batch_size : int
+            Mini-batch size for each gradient update.
+        min_buffer_size : int
+            Transitions required before learning starts.
         target_update_freq : int
-            Episodes between target network updates.
+            Episodes between hard target-network copies.
         seed : int or None
-            Random seed.
         """
 
         def __init__(
             self,
             representation: BaseRepresentation,
-            hidden_dim: int = 128,
+            hidden_dims: tuple = (256, 128),
             alpha: float = 0.001,
             gamma: float = 0.95,
             epsilon: float = 1.0,
-            use_target_network: bool = False,
+            buffer_capacity: int = 50_000,
+            batch_size: int = 64,
+            min_buffer_size: int = 1_000,
             target_update_freq: int = 100,
+            use_target_network: bool = True,   # kept for API compat, always on
             seed: Optional[int] = None,
         ):
-            _check_torch()
-
             self.rep = representation
-            self.hidden_dim = hidden_dim
+            self.hidden_dims = hidden_dims
             self.alpha = alpha
             self.gamma = gamma
             self.epsilon = epsilon
-            self.use_target_network = use_target_network
+            self.batch_size = batch_size
+            self.min_buffer_size = min_buffer_size
             self.target_update_freq = target_update_freq
             self.rng = np.random.default_rng(seed)
 
-            # Set PyTorch seed
             if seed is not None:
                 torch.manual_seed(seed)
+                random.seed(int(seed))
 
-            # Device (CPU for this project — Snake is not GPU-bound)
             self.device = torch.device("cpu")
 
-            # Q-network
             self.q_net = QNetwork(
                 input_dim=representation.state_dim,
-                hidden_dim=hidden_dim,
+                hidden_dims=hidden_dims,
                 n_actions=3,
             ).to(self.device)
 
-            # Target network (optional)
-            if use_target_network:
-                self.target_net = QNetwork(
-                    input_dim=representation.state_dim,
-                    hidden_dim=hidden_dim,
-                    n_actions=3,
-                ).to(self.device)
-                self.target_net.load_state_dict(self.q_net.state_dict())
-                self.target_net.eval()
-            else:
-                self.target_net = None
+            self.target_net = QNetwork(
+                input_dim=representation.state_dim,
+                hidden_dims=hidden_dims,
+                n_actions=3,
+            ).to(self.device)
+            self.target_net.load_state_dict(self.q_net.state_dict())
+            self.target_net.eval()
 
-            # Optimizer
             self.optimizer = optim.Adam(self.q_net.parameters(), lr=alpha)
+            self.replay_buffer = ReplayBuffer(buffer_capacity)
 
-            # Episode counter (for target network updates)
-            self._episode_count = 0
-
-            # Diagnostics
+            self._episode_count: int = 0
             self.td_errors: list[float] = []
 
-        def _state_to_tensor(self, obs: dict) -> torch.Tensor:
-            """Convert observation to a feature tensor."""
-            features = self.rep.get_state_features(obs)
-            return torch.FloatTensor(features).unsqueeze(0).to(self.device)
+        # ------------------------------------------------------------------
+        # Inference
+        # ------------------------------------------------------------------
+
+        def _feat(self, obs: dict) -> np.ndarray:
+            return self.rep.get_state_features(obs)
+
+        def _to_tensor(self, feat: np.ndarray) -> "torch.Tensor":
+            return torch.FloatTensor(feat).unsqueeze(0).to(self.device)
 
         def q_values(self, obs: dict) -> np.ndarray:
-            """Compute Q-values for all actions (no gradient)."""
             with torch.no_grad():
-                x = self._state_to_tensor(obs)
-                q = self.q_net(x).squeeze(0).numpy()
-            return q
+                return self.q_net(self._to_tensor(self._feat(obs))).squeeze(0).numpy()
 
         def q_value(self, obs: dict, action: int) -> float:
-            """Compute Q-value for a specific action."""
             return float(self.q_values(obs)[action])
 
         def act(self, obs: dict) -> int:
-            """Epsilon-greedy action selection."""
             if self.rng.random() < self.epsilon:
                 return int(self.rng.integers(3))
-
             q_vals = self.q_values(obs)
             max_q = np.max(q_vals)
             best = np.where(np.abs(q_vals - max_q) < 1e-8)[0]
             return int(self.rng.choice(best))
+
+        # ------------------------------------------------------------------
+        # Learning
+        # ------------------------------------------------------------------
 
         def update(
             self,
@@ -173,84 +199,80 @@ if HAS_TORCH:
             action: int,
             reward: float,
             next_obs: dict,
-            next_action: int,
+            next_action: int,   # unused — we use max-Q target
             terminated: bool,
         ) -> float:
-            """
-            Semi-gradient SARSA update via backpropagation.
+            """Store transition; run one batch update if buffer is ready."""
+            self.replay_buffer.push(
+                self._feat(obs), action, reward, self._feat(next_obs), terminated
+            )
 
-            Computes: loss = 0.5 * (td_target - q(S, A))^2
-            Then backpropagates through q(S, A) only (semi-gradient).
-            """
-            # Compute TD target (no gradient through target)
+            if len(self.replay_buffer) < self.min_buffer_size:
+                return 0.0
+
+            return self._batch_update()
+
+        def _batch_update(self) -> float:
+            states, actions, rewards, next_states, dones = \
+                self.replay_buffer.sample(self.batch_size)
+
+            states_t      = torch.FloatTensor(states)
+            actions_t     = torch.LongTensor(actions)
+            rewards_t     = torch.FloatTensor(rewards)
+            next_states_t = torch.FloatTensor(next_states)
+            dones_t       = torch.FloatTensor(dones)
+
             with torch.no_grad():
-                if terminated:
-                    td_target = reward
-                else:
-                    if self.target_net is not None:
-                        x_next = self._state_to_tensor(next_obs)
-                        q_next = self.target_net(x_next).squeeze(0)[next_action].item()
-                    else:
-                        q_next = self.q_value(next_obs, next_action)
-                    td_target = reward + self.gamma * q_next
+                next_q  = self.target_net(next_states_t).max(dim=1)[0]
+                targets = rewards_t + self.gamma * next_q * (1.0 - dones_t)
 
-            # Compute q(S, A) with gradient
-            x = self._state_to_tensor(obs)
-            q_all = self.q_net(x).squeeze(0)
-            q_current = q_all[action]
+            q_current = self.q_net(states_t).gather(
+                1, actions_t.unsqueeze(1)
+            ).squeeze(1)
 
-            # Semi-gradient: only differentiate through q_current, not td_target
-            td_error = td_target - q_current.item()
-            loss = 0.5 * (torch.tensor(td_target) - q_current) ** 2
+            loss = F.mse_loss(q_current, targets)
 
-            # Backprop and update
             self.optimizer.zero_grad()
             loss.backward()
-            # Gradient clipping to prevent instability
-            torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
+            torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=5.0)
             self.optimizer.step()
 
-            self.td_errors.append(abs(td_error))
-            return td_error
+            td_err = float((targets - q_current.detach()).abs().mean())
+            self.td_errors.append(td_err)
+            return td_err
 
-        def on_episode_end(self):
-            """
-            Called at the end of each episode.
-            Updates target network if applicable.
-            """
+        def on_episode_end(self) -> None:
             self._episode_count += 1
-            if (self.target_net is not None and
-                    self._episode_count % self.target_update_freq == 0):
+            if self._episode_count % self.target_update_freq == 0:
                 self.target_net.load_state_dict(self.q_net.state_dict())
 
-        def get_weight_stats(self) -> dict:
-            """Network parameter statistics."""
-            all_params = []
-            for p in self.q_net.parameters():
-                all_params.append(p.data.cpu().numpy().flatten())
-            all_params = np.concatenate(all_params)
-            return {
-                "mean": float(np.mean(all_params)),
-                "std": float(np.std(all_params)),
-                "min": float(np.min(all_params)),
-                "max": float(np.max(all_params)),
-                "norm": float(np.linalg.norm(all_params)),
-                "n_params": len(all_params),
-            }
+        # ------------------------------------------------------------------
+        # Diagnostics
+        # ------------------------------------------------------------------
 
         def get_mean_td_error(self, last_n: int = 1000) -> float:
-            """Mean absolute TD error over recent updates."""
             if not self.td_errors:
                 return 0.0
             n = min(last_n, len(self.td_errors))
             return float(np.mean(self.td_errors[-n:]))
 
+        def get_weight_stats(self) -> dict:
+            params = np.concatenate(
+                [p.data.cpu().numpy().flatten() for p in self.q_net.parameters()]
+            )
+            return {
+                "mean":        float(np.mean(params)),
+                "std":         float(np.std(params)),
+                "norm":        float(np.linalg.norm(params)),
+                "n_params":    len(params),
+                "buffer_size": len(self.replay_buffer),
+            }
+
         def __repr__(self) -> str:
-            n_params = sum(p.numel() for p in self.q_net.parameters())
+            n = sum(p.numel() for p in self.q_net.parameters())
             return (
-                f"MLPSarsaAgent(hidden={self.hidden_dim}, "
-                f"alpha={self.alpha}, gamma={self.gamma}, "
-                f"epsilon={self.epsilon:.3f}, "
-                f"params={n_params}, "
-                f"target_net={self.use_target_network})"
+                f"MLPSarsaAgent(hidden={self.hidden_dims}, params={n}, "
+                f"alpha={self.alpha}, "
+                f"buffer={len(self.replay_buffer)}/"
+                f"{self.replay_buffer.buffer.maxlen})"
             )

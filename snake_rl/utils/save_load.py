@@ -33,17 +33,15 @@ def save_agent(agent, name: str, directory: str = WEIGHTS_DIR):
                  )
         print(f"Saved TileCodingSarsaAgent weights to {filepath}")
 
-    elif agent_type in ("MLPSarsaAgent", "MLPSarsaAgentV2"):
+    elif agent_type == "MLPSarsaAgent":
         try:
             import torch
             filepath = os.path.join(directory, f"{name}.pt")
-            # v2 agents store hidden_dims (tuple); v1 agents store hidden_dim (int)
-            hidden_dims = getattr(agent, "hidden_dims", None) or (agent.hidden_dim,)
             torch.save({
                 "q_net": agent.q_net.state_dict(),
                 "alpha": agent.alpha,
                 "gamma": agent.gamma,
-                "hidden_dims": hidden_dims,
+                "hidden_dims": agent.hidden_dims,
             }, filepath)
             print(f"Saved {agent_type} weights to {filepath}")
         except ImportError:
@@ -73,7 +71,7 @@ def load_agent_weights(agent, name: str, directory: str = WEIGHTS_DIR):
             agent.tile_rep._initialized = True
         print(f"Loaded TileCodingSarsaAgent weights from {filepath}")
 
-    elif agent_type in ("MLPSarsaAgent", "MLPSarsaAgentV2"):
+    elif agent_type == "MLPSarsaAgent":
         try:
             import torch
             filepath = os.path.join(directory, f"{name}.pt")

@@ -61,7 +61,7 @@ except ImportError:
 
 GRID_SIZE = 20
 CELL_SIZE = 30
-WEIGHTS_DIR = "weights"
+WEIGHTS_DIR = "weights"        # overridden by --weights-dir
 RECORDINGS_DIR = "recordings"
 
 REPRESENTATIONS = {
@@ -87,24 +87,57 @@ COLOR_TEXT_DIM = (140, 140, 140)
 COLOR_PANEL = (30, 30, 30)
 
 
-def make_agent(algo, rep_name):
-    """Create a fresh agent for the given algo/rep."""
+def _mlp_hidden_dims_from_checkpoint(pt_path: str) -> tuple:
+    """Read hidden_dims from a saved .pt checkpoint without loading the full model."""
+    import torch
+    ckpt = torch.load(pt_path, weights_only=False)
+    return tuple(ckpt.get("hidden_dims", (128,)))
+
+
+def make_agent(algo, rep_name, weights_dir=WEIGHTS_DIR, name=None):
+    """
+    Create a fresh agent for the given algo/rep.
+
+    For MLP agents, reads the architecture (hidden_dims) directly from the
+    checkpoint file so v1 (hidden_dim=128) and v2 (hidden_dims=(256,128))
+    weights both load correctly without any flags.
+    """
     rep = REPRESENTATIONS[rep_name]()
 
     if algo == "linear":
         return LinearSarsaAgent(rep, alpha=0.01, gamma=0.95, seed=42)
+
     elif algo == "tile":
-        agent = TileCodingSarsaAgent(rep, n_tilings=8, n_tiles_per_dim=4,
-                                      max_size=65536, alpha=0.05, gamma=0.95, seed=42)
-        return agent
+        # Detect hash table size from saved weights if available
+        tile_name = name or weight_name(algo, rep_name)
+        npz_path = os.path.join(weights_dir, f"{tile_name}.npz")
+        max_size = 65536
+        if os.path.exists(npz_path):
+            import numpy as np
+            data = np.load(npz_path)
+            max_size = len(data["w"])
+        return TileCodingSarsaAgent(rep, n_tilings=8, n_tiles_per_dim=4,
+                                    max_size=max_size, alpha=0.05, gamma=0.95, seed=42)
+
     elif algo == "mlp":
         if not HAS_TORCH:
             raise ImportError("PyTorch required for MLP")
-        return MLPSarsaAgent(rep, hidden_dim=128, alpha=0.001, gamma=0.95, seed=42)
+        mlp_name = name or weight_name(algo, rep_name)
+        pt_path = os.path.join(weights_dir, f"{mlp_name}.pt")
+        if os.path.exists(pt_path):
+            hidden_dims = _mlp_hidden_dims_from_checkpoint(pt_path)
+        else:
+            hidden_dims = (128,)
+        return MLPSarsaAgent(rep, hidden_dims=hidden_dims, alpha=0.001, gamma=0.95, seed=42)
+
+    raise ValueError(f"Unknown algo: {algo}")
 
 
-def weight_name(algo, rep):
-    return f"{algo}_sarsa__{rep}"
+def weight_name(algo, rep, seed=None, weights_dir=None):
+    """Return the weight file stem for algo/rep, optionally for a specific seed."""
+    seed_suffix = f"_seed{seed}" if seed is not None else ""
+    name = f"{algo}_sarsa__{rep}{seed_suffix}"
+    return name
 
 
 def train_and_save(algo, rep_name):
@@ -130,12 +163,12 @@ def train_and_save(algo, rep_name):
     return agent
 
 
-def load_trained_agent(algo, rep_name):
+def load_trained_agent(algo, rep_name, weights_dir=WEIGHTS_DIR, seed=None):
     """Load a trained agent from saved weights."""
-    agent = make_agent(algo, rep_name)
-    name = weight_name(algo, rep_name)
-    load_agent_weights(agent, name, WEIGHTS_DIR)
-    agent.epsilon = 0.01  # near-greedy for evaluation
+    name = weight_name(algo, rep_name, seed=seed, weights_dir=weights_dir)
+    agent = make_agent(algo, rep_name, weights_dir=weights_dir, name=name)
+    load_agent_weights(agent, name, weights_dir)
+    agent.epsilon = 0.0   # fully greedy for evaluation
     return agent
 
 
@@ -201,7 +234,8 @@ def render_frame(surface, env, agent_name="", score_info="", q_vals=None):
         surface.blit(q_surf, (8, panel_y + 40))
 
 
-def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10):
+def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10,
+               weights_dir=WEIGHTS_DIR, seed=None):
     """Record gameplay as a GIF."""
     if not HAS_PYGAME:
         print("pygame required for recording")
@@ -212,7 +246,7 @@ def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10):
 
     os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
-    agent = load_trained_agent(algo, rep_name)
+    agent = load_trained_agent(algo, rep_name, weights_dir=weights_dir, seed=seed)
     env = SnakeEnv(grid_size=GRID_SIZE, seed=999)
 
     grid_w = GRID_SIZE * CELL_SIZE
@@ -257,23 +291,25 @@ def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10):
         print(f"Saved GIF ({len(frames)} frames): {filepath}")
 
 
-def watch_live(algo, rep_name, fps=10):
+def watch_live(algo, rep_name, fps=10, weights_dir=WEIGHTS_DIR, seed=None):
     """Watch a trained agent play live with Pygame."""
     if not HAS_PYGAME:
         print("pygame required for live playback")
         return
 
     pygame.init()
-    agent = load_trained_agent(algo, rep_name)
+    agent = load_trained_agent(algo, rep_name, weights_dir=weights_dir, seed=seed)
     env = SnakeEnv(grid_size=GRID_SIZE, seed=int(time.time()) % 10000)
 
     grid_w = GRID_SIZE * CELL_SIZE
     panel_h = 60
     screen = pygame.display.set_mode((grid_w, grid_w + panel_h))
-    pygame.display.set_caption(f"Snake RL — {algo}_sarsa + {rep_name}")
+    seed_label = f" seed={seed}" if seed is not None else ""
+    pygame.display.set_caption(f"Snake RL — {algo}_sarsa + {rep_name}{seed_label}")
     clock = pygame.time.Clock()
 
-    name = f"{algo}_sarsa + {rep_name}"
+    wdir_label = f" [{weights_dir}]" if weights_dir != WEIGHTS_DIR else ""
+    name = f"{algo}_sarsa + {rep_name}{seed_label}{wdir_label}"
     obs, _ = env.reset()
     running = True
     total_episodes = 0
@@ -349,28 +385,48 @@ def record_all():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Snake RL Gameplay Recording")
+    parser = argparse.ArgumentParser(
+        description="Snake RL Gameplay Recording",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  # Watch MLP on compact representation
+  python record_gameplay.py --watch mlp compact
+
+  # Watch a specific seed
+  python record_gameplay.py --watch mlp compact --seed 3
+
+  # Record a GIF
+  python record_gameplay.py --record --algo mlp --rep compact
+        """,
+    )
     parser.add_argument("--train", action="store_true",
                         help="Train all agents and save weights")
     parser.add_argument("--record", action="store_true",
                         help="Record GIFs for all saved agents")
     parser.add_argument("--watch", nargs=2, metavar=("ALGO", "REP"),
-                        help="Watch a trained agent play live (e.g., --watch tile compact)")
+                        help="Watch a trained agent play live")
     parser.add_argument("--algo", type=str, default=None,
                         choices=["linear", "tile", "mlp"])
     parser.add_argument("--rep", type=str, default=None,
                         choices=["compact", "local", "extended"])
     parser.add_argument("--fps", type=int, default=10)
+    parser.add_argument("--weights-dir", type=str, default=WEIGHTS_DIR,
+                        help="Directory containing saved weights (default: weights/)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Load weights for a specific seed (e.g., --seed 2)")
     args = parser.parse_args()
+
+    wdir = args.weights_dir
 
     if args.train:
         train_all_and_save()
     elif args.watch:
         algo, rep = args.watch
-        watch_live(algo, rep, fps=args.fps)
+        watch_live(algo, rep, fps=args.fps, weights_dir=wdir, seed=args.seed)
     elif args.record:
         if args.algo and args.rep:
-            record_gif(args.algo, args.rep, fps=args.fps)
+            record_gif(args.algo, args.rep, fps=args.fps, weights_dir=wdir, seed=args.seed)
         else:
             record_all()
     else:
