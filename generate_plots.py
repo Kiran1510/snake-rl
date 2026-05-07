@@ -20,6 +20,7 @@ from snake_rl.utils.plotting import (
     plot_comparison,
     plot_comparison_by_representation,
     plot_final_performance_table,
+    plot_performance_heatmap,
 )
 
 FIGURES_DIR = "figures"
@@ -61,6 +62,17 @@ def generate_all_plots(results: dict, figures_dir: str):
         save_path = os.path.join(figures_dir, f"learning_curve_{name}.png")
         plot_learning_curve(result, window=100, save_path=save_path)
 
+    ALGO_DISPLAY = {
+        "linear_sarsa": "Linear FA",
+        "tile_sarsa":   "Tile Coding",
+        "mlp_sarsa":    "MLP",
+    }
+    REP_DISPLAY = {
+        "compact":  "Compact (11d)",
+        "local":    "Local (109d)",
+        "extended": "Extended (126d)",
+    }
+
     # 2. Comparison by algorithm (all reps on one plot per algo)
     print("\n--- Algorithm comparison plots ---")
     algos = set()
@@ -74,11 +86,13 @@ def generate_all_plots(results: dict, figures_dir: str):
     for algo in sorted(algos):
         algo_results = [r for name, r in results.items() if name.startswith(algo)]
         if algo_results:
-            labels = [r.config.representation for r in algo_results]
+            labels = [REP_DISPLAY.get(r.config.representation, r.config.representation)
+                      for r in algo_results]
+            display = ALGO_DISPLAY.get(algo, algo)
             save_path = os.path.join(figures_dir, f"comparison_{algo}.png")
             plot_comparison(
                 algo_results, labels=labels,
-                title=f"{algo} across representations",
+                title=f"{display} — Score by Representation",
                 save_path=save_path,
             )
 
@@ -87,11 +101,13 @@ def generate_all_plots(results: dict, figures_dir: str):
     for rep in sorted(reps):
         rep_results = [r for name, r in results.items() if name.endswith(f"__{rep}")]
         if rep_results:
-            labels = [r.config.algorithm for r in rep_results]
+            labels = [ALGO_DISPLAY.get(r.config.algorithm, r.config.algorithm)
+                      for r in rep_results]
+            display = REP_DISPLAY.get(rep, rep)
             save_path = os.path.join(figures_dir, f"comparison_{rep}.png")
             plot_comparison(
                 rep_results, labels=labels,
-                title=f"Algorithms on {rep} representation",
+                title=f"{display} — Score by Algorithm",
                 save_path=save_path,
             )
 
@@ -106,7 +122,12 @@ def generate_all_plots(results: dict, figures_dir: str):
     save_path = os.path.join(figures_dir, "final_performance.png")
     plot_final_performance_table(all_results, save_path=save_path)
 
-    # 6. Print summary table (for copy-paste into report)
+    # 6. Heatmap (3×3 summary — best single figure for a paper)
+    print("\n--- Performance heatmap ---")
+    save_path = os.path.join(figures_dir, "heatmap.png")
+    plot_performance_heatmap(all_results, save_path=save_path)
+
+    # 7. Print summary table (for copy-paste into report)
     print("\n" + "=" * 70)
     print("RESULTS TABLE (for report)")
     print("=" * 70)
