@@ -178,9 +178,9 @@ Table~\ref{tab:main_results} presents the final performance across all 9 configu
 \toprule
  & \textbf{Compact} & \textbf{Local} & \textbf{Extended} \\
 \midrule
-Linear FA   & $0.80 \pm 0.07$          & $0.67 \pm 0.03$          & $3.90 \pm 0.98$ \\
-Tile Coding & $\mathbf{22.69 \pm 0.54}$ & $3.21 \pm 0.17$          & $1.32 \pm 0.03$ \\
-Double DQN  & $24.26 \pm 0.39$          & $22.51 \pm 0.38$         & $\mathbf{29.05 \pm 0.32}$ \\
+Linear FA   & $0.80 \pm 0.07$           & $0.67 \pm 0.03$           & $3.90 \pm 0.98$ \\
+Tile Coding & $22.69 \pm 0.54$          & $3.21 \pm 0.17$           & $1.32 \pm 0.03$ \\
+Double DQN  & $\mathbf{24.26 \pm 0.39}$ & $\mathbf{22.51 \pm 0.38}$ & $\mathbf{29.05 \pm 0.32}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -199,11 +199,18 @@ Double DQN  & $24.26 \pm 0.39$          & $22.51 \pm 0.38$         & $\mathbf{29
 \label{fig:final_perf}
 \end{figure}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{heatmap.png}
+\caption{3$\times$3 heatmap of mean scores over the final 1,000 episodes (algorithms $\times$ representations). Double DQN dominates all cells; tile coding is competitive only on compact.}
+\label{fig:heatmap}
+\end{figure}
+
 \subsection{Analysis}
 
 \subsubsection{Representation and Approximation Interaction.}
 
-The results reveal a strong interaction between representation complexity and approximation method. Tile coding achieves its best score on compact features (22.69), competitive with the greedy heuristic (22.89), but collapses to 3.21 on local and 1.32 on extended. Double DQN shows the opposite pattern: it achieves its highest score on extended features (29.05), exceeding the greedy heuristic by 27\%, while remaining competitive across all representations (24.26 compact, 22.51 local). Linear FA is weak everywhere, peaking at 3.90 on extended.
+The results reveal a strong interaction between representation complexity and approximation method, summarized in Figure~\ref{fig:heatmap}. Tile coding achieves its best score on compact features (22.69), competitive with the greedy heuristic (22.89), but collapses to 3.21 on local and 1.32 on extended. Double DQN shows the opposite pattern: it achieves its highest score on extended features (29.05), exceeding the greedy heuristic by 27\%, and wins on every representation (24.26 compact, 22.51 local), including outperforming tile coding on compact (22.69) where tile coding is strongest. Linear FA is weak everywhere, peaking at 3.90 on extended.
 
 This interaction aligns with theoretical expectations. Tile coding builds generalization through spatial overlap in the tiled state space; this structure is well-defined in low dimensions but breaks down under hash collisions at high dimensionality. Neural networks learn generalization directly from data via gradient descent, making them representation-agnostic when given sufficient training and a stable learning algorithm.
 
@@ -240,7 +247,7 @@ The complete source code for the custom environment, training algorithms, and ev
 
 We presented a systematic comparison of three function approximation methods across three state representations for learning to play Snake, using 20,000 training episodes and 5 random seeds. The key findings are: (1) Double DQN with experience replay achieves the highest and most consistent performance, reaching 29.05 on extended features and exceeding the greedy heuristic (22.89) by 27\%; (2) tile coding is an effective middle ground for compact, well-designed features (22.69) but collapses monotonically with dimensionality due to hash collisions; (3) linear FA learns danger avoidance but not food-seeking, remaining below 4.0 across all representations.
 
-These results yield two practical insights. First, tile coding is a powerful and underappreciated middle ground: when features are low-dimensional and well-designed, it nearly matches neural network performance at a fraction of the computational cost. Second, representation design matters as much as algorithm selection: Double DQN scores 29.05 on extended but 22.51 on local — a 23\% variation driven purely by representation, not algorithm. Third, the stabilizing infrastructure of Double DQN and experience replay is critical for consistent neural network performance across diverse representations.
+These results yield three practical insights. First, tile coding is a powerful and underappreciated middle ground: when features are low-dimensional and well-designed, it nearly matches neural network performance at a fraction of the computational cost. Second, representation design matters as much as algorithm selection: Double DQN scores 29.05 on extended but 22.51 on local — a 23\% variation driven purely by representation, not algorithm. Third, the stabilizing infrastructure of Double DQN and experience replay is critical for consistent neural network performance across diverse representations.
 
 Limitations include the focus on a single domain (Snake), moderate hyperparameter tuning, and the absence of prioritized experience replay \cite{schaul2016prioritized}, which may further improve sample efficiency. Future work should investigate adaptive tile coding \cite{sherstov2005tilecoding} for high-dimensional inputs and continuous ray-casting representations to provide smoother gradients for function approximators.
 
