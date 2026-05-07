@@ -115,7 +115,10 @@ ALGO_CONFIGS = {
     "tile": {
         "alpha": 0.05,
         "algo_params": {
-            "n_tilings": 8,
+            # n_tilings per rep: compact is low-dim so 8 tilings works well;
+            # local/extended are 109+/126+ dims — 8 tilings hurts speed with
+            # no quality gain given the 262k hash table size.
+            "n_tilings": {"compact": 8, "local": 4, "extended": 4},
             "n_tiles_per_dim": 4,
             "max_size": 262_144,
         },
@@ -168,9 +171,16 @@ def make_agent(algo: str, rep_instance, config: ExperimentConfig, seed: int, env
         )
     elif algo == "tile":
         p = config.algo_params
+        n_tilings_cfg = p.get("n_tilings", 8)
+        rep_name = config.representation
+        n_tilings = (
+            n_tilings_cfg[rep_name]
+            if isinstance(n_tilings_cfg, dict)
+            else n_tilings_cfg
+        )
         agent = TileCodingSarsaAgent(
             base_representation=rep_instance,
-            n_tilings=p.get("n_tilings", 8),
+            n_tilings=n_tilings,
             n_tiles_per_dim=p.get("n_tiles_per_dim", 4),
             max_size=p.get("max_size", 262_144),
             alpha=config.alpha, gamma=config.gamma, seed=seed,

@@ -7,8 +7,9 @@ replay buffer. Keeps the same training-loop interface (.act, .update,
 
     - Replay buffer (default 50k): transitions stored each step;
       a random mini-batch sampled for every gradient update.
-    - Q-learning TD target: max_a Q_target(s', a).
+    - Double DQN TD target: online net selects action, target net scores it.
     - Target network: hard-copied every target_update_freq episodes.
+    - Huber loss (smooth L1) instead of MSE for robustness to large TD errors.
     - Configurable depth (default: 256 → 128).
     - Gradient clipping at 5.0.
 
@@ -223,14 +224,16 @@ if HAS_TORCH:
             dones_t       = torch.FloatTensor(dones)
 
             with torch.no_grad():
-                next_q  = self.target_net(next_states_t).max(dim=1)[0]
+                # Double DQN: online net selects action, target net scores it
+                next_actions = self.q_net(next_states_t).argmax(dim=1, keepdim=True)
+                next_q  = self.target_net(next_states_t).gather(1, next_actions).squeeze(1)
                 targets = rewards_t + self.gamma * next_q * (1.0 - dones_t)
 
             q_current = self.q_net(states_t).gather(
                 1, actions_t.unsqueeze(1)
             ).squeeze(1)
 
-            loss = F.mse_loss(q_current, targets)
+            loss = F.smooth_l1_loss(q_current, targets)
 
             self.optimizer.zero_grad()
             loss.backward()
