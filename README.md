@@ -284,16 +284,16 @@ from snake_rl.representations import CompactRepresentation
 rep = CompactRepresentation()
 agent = TileCodingSarsaAgent(
     base_representation=rep,
-    n_tilings=8,          # overlapping tilings
-    n_tiles_per_dim=4,    # tiles per dimension per tiling
-    max_size=65536,       # hash table size
-    alpha=0.05,           # learning rate (divided by n_tilings internally)
+    n_tilings=8,            # overlapping tilings (use 4 for local/extended)
+    n_tiles_per_dim=4,      # tiles per dimension per tiling
+    max_size=262_144,       # hash table size
+    alpha=0.05,             # learning rate (divided by n_tilings internally)
     gamma=0.95,
     seed=42,
 )
 
 # IMPORTANT: initialize feature normalization before training
-env = SnakeEnv(grid_size=10, seed=42)
+env = SnakeEnv(grid_size=20, seed=42)
 agent.initialize(env)
 ```
 
