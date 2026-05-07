@@ -459,7 +459,7 @@ print(f"Mean final score: {perf['mean_score']:.2f} ± {perf['std_score']:.2f}")
 
 ### Agent End-of-Episode Hook
 
-The training loop calls `agent.on_episode_end()` after each episode if the method exists. The MLP agent uses this for target network updates. Linear and tile coding agents don't need it.
+The training loop calls `agent.on_episode_end()` after each episode if the method exists. The Double DQN agent uses this for target network updates. Linear and tile coding agents don't need it.
 
 ---
 
@@ -490,13 +490,13 @@ Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean s
 |---|---|---|---|
 | **Linear FA** | 0.80 ± 0.07 | 0.67 ± 0.03 | 3.90 ± 0.98 |
 | **Tile Coding** | 22.69 ± 0.54 | 3.21 ± 0.17 | 1.32 ± 0.03 |
-| **MLP** | 24.26 ± 0.39 | 22.51 ± 0.38 | **29.05 ± 0.32** |
+| **Double DQN** | 24.26 ± 0.39 | 22.51 ± 0.38 | **29.05 ± 0.32** |
 
 ### Visual Summary
 
 ![Performance heatmap across algorithms × representations](figures/heatmap.png)
 
-*Heatmap of mean final scores. MLP (Double DQN) dominates every cell; tile coding is competitive only on compact features.*
+*Heatmap of mean final scores. Double DQN dominates every cell; tile coding is competitive only on compact features.*
 
 ![Learning curves grouped by representation](figures/comparison_by_representation.png)
 
@@ -506,9 +506,9 @@ Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean s
 
 **Tile coding's performance degrades sharply with dimensionality.** Tile × compact (22.69) outperforms tile × local (3.21) by ~7× and tile × extended (1.32) by ~17×. Hash-based tile coding was designed for low-dimensional continuous spaces; at 109+ dimensions, hash collisions in the fixed-size table (262,144 entries) dominate and generalization breaks down. Extended actually performs *worse* than local despite having more information — more dimensions means more collisions.
 
-**MLP is more robust to representation choice than tile coding.** MLP scores (24.26 / 22.51 / 29.05) stay competitive across all three representations. Tile coding's scores collapse monotonically with dimensionality (22.69 → 3.21 → 1.32). The gap is starkest on extended: MLP (29.05) vs tile coding (1.32) — a 22× difference on the same representation.
+**Double DQN is more robust to representation choice than tile coding.** Double DQN scores (24.26 / 22.51 / 29.05) stay competitive across all three representations. Tile coding's scores collapse monotonically with dimensionality (22.69 → 3.21 → 1.32). The gap is starkest on extended: Double DQN (29.05) vs tile coding (1.32) — a 22× difference on the same representation.
 
-**MLP variance tightens with richer representations.** Seed-to-seed std narrows from ±0.39 (compact) to ±0.32 (extended) — the richer feature space provides a more stable learning signal for the network.
+**Double DQN variance tightens with richer representations.** Seed-to-seed std narrows from ±0.39 (compact) to ±0.32 (extended) — the richer feature space provides a more stable learning signal for the network.
 
 **Linear FA benefits from richer representations.** Extended (3.90) is ~5× better than compact (0.80) for linear FA, because the extended representation explicitly encodes interaction terms that a linear model cannot learn on its own.
 
@@ -567,7 +567,7 @@ Full 3×3 matrix: 20,000 episodes × 5 random seeds × 9 configurations, 20×20 
 |---|---|---|---|
 | **Linear FA** | α=0.01 | α=0.01 | α=0.01 |
 | **Tile Coding** | α=0.05, 8 tilings | α=0.05, 4 tilings | α=0.05, 4 tilings |
-| **MLP** | α=0.001, (256,128) | α=0.001, (256,128) | α=0.001, (256,128) |
+| **Double DQN** | α=0.001, (256,128) | α=0.001, (256,128) | α=0.001, (256,128) |
 
 Tile coding uses fewer tilings for local/extended representations (4 vs 8) because the higher dimensionality already provides sufficient coverage with a 262,144-entry hash table.
 
@@ -581,7 +581,7 @@ Tile coding uses fewer tilings for local/extended representations (4 vs 8) becau
 - NumPy
 - Pygame (for visual rendering and human play)
 - Matplotlib (for plotting)
-- PyTorch (for MLP agent)
+- PyTorch (for Double DQN agent)
 
 ### Installation
 
