@@ -72,7 +72,8 @@ def record_one_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=300, fps=10, s
     pygame.font.init()
     surface = pygame.Surface((grid_w, grid_w + panel_h))
 
-    label = f"{algo}_sarsa + {rep_name}"
+    algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
+    label = f"{algo_label} + {rep_name}"
     frames = []
 
     for ep in range(n_episodes):
@@ -92,7 +93,6 @@ def record_one_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=300, fps=10, s
     pygame.quit()
 
     if frames:
-        algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
         filepath = os.path.join(RECORDINGS_DIR, f"{algo_label}__{rep_name}.gif")
         frames[0].save(
             filepath,

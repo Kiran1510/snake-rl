@@ -253,7 +253,8 @@ def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10,
     panel_h = 60
     surface = pygame.Surface((grid_w, grid_w + panel_h))
 
-    name = f"{algo}_sarsa + {rep_name}"
+    algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
+    name = f"{algo_label} + {rep_name}"
     frames = []
 
     pygame.init()
@@ -279,7 +280,6 @@ def record_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=200, fps=10,
     pygame.quit()
 
     if frames:
-        algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
         filepath = os.path.join(RECORDINGS_DIR, f"{algo_label}__{rep_name}.gif")
         frames[0].save(
             filepath,
@@ -305,12 +305,13 @@ def watch_live(algo, rep_name, fps=10, weights_dir=WEIGHTS_DIR, seed=None):
     grid_w = GRID_SIZE * CELL_SIZE
     panel_h = 60
     screen = pygame.display.set_mode((grid_w, grid_w + panel_h))
+    algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
     seed_label = f" seed={seed}" if seed is not None else ""
-    pygame.display.set_caption(f"Snake RL — {algo}_sarsa + {rep_name}{seed_label}")
+    pygame.display.set_caption(f"Snake RL — {algo_label} + {rep_name}{seed_label}")
     clock = pygame.time.Clock()
 
     wdir_label = f" [{weights_dir}]" if weights_dir != WEIGHTS_DIR else ""
-    name = f"{algo}_sarsa + {rep_name}{seed_label}{wdir_label}"
+    name = f"{algo_label} + {rep_name}{seed_label}{wdir_label}"
     obs, _ = env.reset()
     running = True
     total_episodes = 0
