@@ -32,7 +32,7 @@ from snake_rl.utils.save_load import load_agent_weights
 from record_gameplay import render_frame, make_agent, weight_name
 
 try:
-    from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+    from snake_rl.agents.double_dqn import DoubleDQNAgent
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False

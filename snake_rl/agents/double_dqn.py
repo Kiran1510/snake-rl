@@ -1,9 +1,9 @@
 """
-MLP agent with experience replay and target network.
+Double DQN agent with experience replay and target network.
 
-Replaces single-step semi-gradient SARSA with mini-batch Q-learning from a
-replay buffer. Keeps the same training-loop interface (.act, .update,
-.on_episode_end, .epsilon) so it drops into train_sarsa unchanged.
+Mini-batch Q-learning from a replay buffer with the Double DQN target.
+Keeps the same training-loop interface (.act, .update, .on_episode_end,
+.epsilon) so it drops into train_sarsa unchanged.
 
     - Replay buffer (default 50k): transitions stored each step;
       a random mini-batch sampled for every gradient update.
@@ -89,7 +89,7 @@ if HAS_TORCH:
             return self.net(x)
 
 
-    class MLPSarsaAgent:
+    class DoubleDQNAgent:
         """
         Q-learning agent with replay buffer and target network.
 
@@ -274,7 +274,7 @@ if HAS_TORCH:
         def __repr__(self) -> str:
             n = sum(p.numel() for p in self.q_net.parameters())
             return (
-                f"MLPSarsaAgent(hidden={self.hidden_dims}, params={n}, "
+                f"DoubleDQNAgent(hidden={self.hidden_dims}, params={n}, "
                 f"alpha={self.alpha}, "
                 f"buffer={len(self.replay_buffer)}/"
                 f"{self.replay_buffer.buffer.maxlen})"

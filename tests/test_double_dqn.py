@@ -1,7 +1,7 @@
 """
-Tests for MLP SARSA agent.
+Tests for Double DQN agent.
 
-Requires PyTorch. Run with: python tests/test_mlp_sarsa.py
+Requires PyTorch. Run with: python tests/test_double_dqn.py
 
 If PyTorch is not installed, all tests are skipped gracefully.
 """
@@ -22,7 +22,7 @@ except ImportError:
     HAS_TORCH = False
 
 if HAS_TORCH:
-    from snake_rl.agents.mlp_sarsa import MLPSarsaAgent, QNetwork
+    from snake_rl.agents.double_dqn import DoubleDQNAgent, QNetwork
 from snake_rl.env.snake_env import SnakeEnv
 from snake_rl.representations.features import (
     CompactRepresentation, LocalNeighborhoodRepresentation, ExtendedRepresentation,
@@ -59,11 +59,11 @@ class TestQNetwork:
         assert n_params == 1923
 
 
-class TestMLPSarsaAgent:
+class TestDoubleDQNAgent:
 
     def test_initialization(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dims=(64,), seed=42)
+        agent = DoubleDQNAgent(rep, hidden_dims=(64,), seed=42)
         assert agent.hidden_dims == (64,)
         assert agent.gamma == 0.95
         stats = agent.get_weight_stats()
@@ -71,7 +71,7 @@ class TestMLPSarsaAgent:
 
     def test_q_values_shape(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, seed=42)
+        agent = DoubleDQNAgent(rep, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         q = agent.q_values(obs)
@@ -79,7 +79,7 @@ class TestMLPSarsaAgent:
 
     def test_q_value_single(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, seed=42)
+        agent = DoubleDQNAgent(rep, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         q_all = agent.q_values(obs)
@@ -89,7 +89,7 @@ class TestMLPSarsaAgent:
 
     def test_act_returns_valid(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, epsilon=0.5, seed=42)
+        agent = DoubleDQNAgent(rep, epsilon=0.5, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         for _ in range(50):
@@ -97,7 +97,7 @@ class TestMLPSarsaAgent:
 
     def test_act_greedy(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, epsilon=0.0, seed=42)
+        agent = DoubleDQNAgent(rep, epsilon=0.0, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         q = agent.q_values(obs)
@@ -109,7 +109,7 @@ class TestMLPSarsaAgent:
     def test_update_changes_params(self):
         rep = CompactRepresentation()
         # min_buffer_size=1, batch_size=1 so the very first update triggers a gradient step
-        agent = MLPSarsaAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
+        agent = DoubleDQNAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         params_before = [p.data.clone() for p in agent.q_net.parameters()]
@@ -124,7 +124,7 @@ class TestMLPSarsaAgent:
 
     def test_update_terminal(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
+        agent = DoubleDQNAgent(rep, alpha=0.01, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         # Terminal update should not crash
@@ -133,7 +133,7 @@ class TestMLPSarsaAgent:
 
     def test_td_error_tracking(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.001, min_buffer_size=1, batch_size=1, seed=42)
+        agent = DoubleDQNAgent(rep, alpha=0.001, min_buffer_size=1, batch_size=1, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         obs, _ = env.reset()
         for _ in range(5):
@@ -149,7 +149,7 @@ class TestMLPSarsaAgent:
 
     def test_target_network_init(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, use_target_network=True, seed=42)
+        agent = DoubleDQNAgent(rep, use_target_network=True, seed=42)
         assert agent.target_net is not None
         # Target should have same params as q_net initially
         for p1, p2 in zip(agent.q_net.parameters(), agent.target_net.parameters()):
@@ -157,7 +157,7 @@ class TestMLPSarsaAgent:
 
     def test_target_network_update(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(
+        agent = DoubleDQNAgent(
             rep, use_target_network=True, target_update_freq=5,
             alpha=0.01, min_buffer_size=1, batch_size=1, seed=42,
         )
@@ -187,7 +187,7 @@ class TestMLPSarsaAgent:
 
     def test_train_compact(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dims=(64,), alpha=0.001,
+        agent = DoubleDQNAgent(rep, hidden_dims=(64,), alpha=0.001,
                               min_buffer_size=32, batch_size=32, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
@@ -200,7 +200,7 @@ class TestMLPSarsaAgent:
     def test_train_all_representations(self):
         for RepClass in [CompactRepresentation, LocalNeighborhoodRepresentation, ExtendedRepresentation]:
             rep = RepClass()
-            agent = MLPSarsaAgent(rep, hidden_dims=(32,), alpha=0.001,
+            agent = DoubleDQNAgent(rep, hidden_dims=(32,), alpha=0.001,
                                   min_buffer_size=32, batch_size=32, seed=42)
             env = SnakeEnv(grid_size=10, seed=42)
             config = ExperimentConfig(
@@ -212,7 +212,7 @@ class TestMLPSarsaAgent:
 
     def test_no_nan_in_params(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, alpha=0.001, min_buffer_size=64, batch_size=64, seed=42)
+        agent = DoubleDQNAgent(rep, alpha=0.001, min_buffer_size=64, batch_size=64, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
             algorithm="mlp_sarsa", representation="compact",
@@ -225,18 +225,18 @@ class TestMLPSarsaAgent:
 
     def test_repr(self):
         rep = CompactRepresentation()
-        agent = MLPSarsaAgent(rep, hidden_dims=(128,), seed=42)
+        agent = DoubleDQNAgent(rep, hidden_dims=(128,), seed=42)
         r = repr(agent)
-        assert "MLPSarsaAgent" in r
+        assert "DoubleDQNAgent" in r
         assert "hidden=(128,)" in r
 
 
-class TestMLPLearningSanity:
+class TestDoubleDQNLearningSanity:
 
     def test_training_improves(self):
         rep = CompactRepresentation()
         # Smaller min_buffer_size so learning starts within the 3000-episode budget
-        agent = MLPSarsaAgent(rep, hidden_dims=(64,), alpha=0.001,
+        agent = DoubleDQNAgent(rep, hidden_dims=(64,), alpha=0.001,
                               gamma=0.95, min_buffer_size=200, batch_size=32, seed=42)
         env = SnakeEnv(grid_size=10, seed=42)
         config = ExperimentConfig(
@@ -259,7 +259,7 @@ class TestMLPLearningSanity:
 def run_all_tests():
     if not HAS_TORCH:
         print("=" * 70)
-        print("MLP SARSA TEST SUITE — SKIPPED (PyTorch not installed)")
+        print("DOUBLE DQN TEST SUITE — SKIPPED (PyTorch not installed)")
         print("Install with: pip install torch")
         print("=" * 70)
         return True
@@ -272,7 +272,7 @@ def run_all_tests():
     total = passed = failed = 0
     errors = []
     print("=" * 70)
-    print("MLP SARSA TEST SUITE")
+    print("DOUBLE DQN TEST SUITE")
     print("=" * 70)
     start_time = time.time()
     for cls in test_classes:

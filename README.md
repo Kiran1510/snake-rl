@@ -49,7 +49,7 @@ snake_RL/
 │   │   ├── baselines.py            # Random agent, Greedy heuristic, evaluation utility
 │   │   ├── linear_sarsa.py         # Semi-gradient SARSA with linear function approximation
 │   │   ├── tile_sarsa.py           # Semi-gradient SARSA with tile coding
-│   │   ├── mlp_sarsa.py            # Double DQN with experience replay + target network (PyTorch)
+│   │   ├── double_dqn.py           # Double DQN with experience replay + target network (PyTorch)
 │   │   └── train.py                # Shared SARSA training loop
 │   └── utils/                      # Experiment infrastructure
 │       ├── __init__.py
@@ -64,7 +64,7 @@ snake_RL/
 │   ├── test_experiment.py          # 25 experiment infrastructure tests
 │   ├── test_linear_sarsa.py        # 24 linear FA SARSA tests
 │   ├── test_tile_sarsa.py          # 21 tile coding SARSA tests
-│   └── test_mlp_sarsa.py           # 20+ MLP SARSA tests (requires PyTorch)
+│   └── test_double_dqn.py          # 19 Double DQN tests (requires PyTorch)
 ├── RL_Project_Paper/               # AAAI-style LaTeX paper (with figures and bib)
 ├── results/                        # Saved experiment results (JSON, one per algo×rep)
 ├── weights/                        # Saved agent weights (one per seed: .npz / .pt)
@@ -331,7 +331,7 @@ The tile coding system has three layers:
 2. **`TileCodingRepresentation`**: Wraps any `BaseRepresentation` and handles normalization. Estimates feature ranges from sampled states.
 3. **`TileCodingSarsaAgent`**: The full agent combining tile coding with semi-gradient SARSA.
 
-### Algorithm 3: MLP SARSA (`snake_rl/agents/mlp_sarsa.py`)
+### Algorithm 3: Double DQN (`snake_rl/agents/double_dqn.py`)
 
 The action-value function is approximated by a two-hidden-layer MLP:
 
@@ -357,11 +357,11 @@ target = R + γ · Q_target(S', argmax_a Q_online(S', a))
 - **Potential-based reward shaping:** Training wraps the environment with `DistanceShapingWrapper` (shaping factor 0.5), adding `0.5 × (prev_dist − curr_dist)` per step, skipped on food eat. Provides dense signal during exploration without changing the optimal policy (Ng et al., 1999).
 
 ```python
-from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+from snake_rl.agents.double_dqn import DoubleDQNAgent
 from snake_rl.representations import CompactRepresentation
 
 rep = CompactRepresentation()
-agent = MLPSarsaAgent(
+agent = DoubleDQNAgent(
     representation=rep,
     hidden_dims=(256, 128),   # two hidden layers
     alpha=0.001,              # Adam learning rate
@@ -601,7 +601,7 @@ python tests/test_baselines.py
 python tests/test_experiment.py
 python tests/test_linear_sarsa.py
 python tests/test_tile_sarsa.py
-python tests/test_mlp_sarsa.py
+python tests/test_double_dqn.py
 
 # Play Snake manually
 python -c "from snake_rl.env.renderer import play_human; play_human()"
@@ -641,7 +641,7 @@ The project has **~210 tests** organized across 7 test files:
 | `test_experiment.py` | 25 | RunLogger, ExperimentConfig, ExperimentResult, serialization, persistence, epsilon schedule |
 | `test_linear_sarsa.py` | 24 | Agent mechanics (Q-values, action selection, weight updates, terminal vs non-terminal), training loop (epsilon decay, logging, all representations), learning sanity (score improvement, danger weight analysis) |
 | `test_tile_sarsa.py` | 21 | Tile coder (active tiles, uniqueness, hashing, nearby/distant state sharing), normalization, agent mechanics, sparsity, all representations, learning sanity |
-| `test_mlp_sarsa.py` | 20+ | QNetwork architecture, agent mechanics, gradient updates, target network init/sync, training with all representations, NaN safety, learning sanity. Requires PyTorch |
+| `test_double_dqn.py` | 19 | QNetwork architecture, agent mechanics, gradient updates, target network init/sync, training with all representations, NaN safety, learning sanity. Requires PyTorch |
 
 All tests work with both **pytest** (`pytest tests/ -v`) and the **standalone runner** (`python tests/run_tests.py`) which requires no external testing framework.
 

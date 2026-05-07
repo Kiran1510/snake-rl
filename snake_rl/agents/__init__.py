@@ -4,6 +4,6 @@ from snake_rl.agents.tile_sarsa import TileCodingSarsaAgent
 from snake_rl.agents.train import train_sarsa, run_experiment
 
 try:
-    from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+    from snake_rl.agents.double_dqn import DoubleDQNAgent
 except ImportError:
     pass

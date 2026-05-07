@@ -33,7 +33,7 @@ def save_agent(agent, name: str, directory: str = WEIGHTS_DIR):
                  )
         print(f"Saved TileCodingSarsaAgent weights to {filepath}")
 
-    elif agent_type == "MLPSarsaAgent":
+    elif agent_type == "DoubleDQNAgent":
         try:
             import torch
             filepath = os.path.join(directory, f"{name}.pt")
@@ -71,7 +71,7 @@ def load_agent_weights(agent, name: str, directory: str = WEIGHTS_DIR):
             agent.tile_rep._initialized = True
         print(f"Loaded TileCodingSarsaAgent weights from {filepath}")
 
-    elif agent_type == "MLPSarsaAgent":
+    elif agent_type == "DoubleDQNAgent":
         try:
             import torch
             filepath = os.path.join(directory, f"{name}.pt")

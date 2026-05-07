@@ -41,7 +41,7 @@ from snake_rl.utils.experiment import ExperimentConfig
 from snake_rl.utils.save_load import save_agent, load_agent_weights
 
 try:
-    from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+    from snake_rl.agents.double_dqn import DoubleDQNAgent
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -128,7 +128,7 @@ def make_agent(algo, rep_name, weights_dir=WEIGHTS_DIR, name=None):
             hidden_dims = _mlp_hidden_dims_from_checkpoint(pt_path)
         else:
             hidden_dims = (128,)
-        return MLPSarsaAgent(rep, hidden_dims=hidden_dims, alpha=0.001, gamma=0.95, seed=42)
+        return DoubleDQNAgent(rep, hidden_dims=hidden_dims, alpha=0.001, gamma=0.95, seed=42)
 
     raise ValueError(f"Unknown algo: {algo}")
 

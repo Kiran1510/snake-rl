@@ -1,7 +1,7 @@
 """
 Experiment runner.
 
-    1. MLPSarsaAgent — replay buffer (50k), Q-learning target, target network
+    1. DoubleDQNAgent — replay buffer (50k), Q-learning target, target network
     2. Distance-based reward shaping — small bonus for moving toward food
     3. max_steps_factor=3 (1,200 steps max)
     4. Larger tile hash table (262,144)
@@ -38,7 +38,7 @@ from snake_rl.utils.experiment import (
 from snake_rl.utils.save_load import save_agent
 
 try:
-    from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
+    from snake_rl.agents.double_dqn import DoubleDQNAgent
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -191,7 +191,7 @@ def make_agent(algo: str, rep_instance, config: ExperimentConfig, seed: int, env
         if not HAS_TORCH:
             raise ImportError("PyTorch required for MLP agent")
         p = config.algo_params
-        return MLPSarsaAgent(
+        return DoubleDQNAgent(
             representation=rep_instance,
             hidden_dims=p.get("hidden_dims", (256, 128)),
             alpha=config.alpha,
