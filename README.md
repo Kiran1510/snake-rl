@@ -25,7 +25,7 @@ Most existing Snake RL work uses off-policy DQN with a single state representati
 
 ### The best agent in action
 
-![Double DQN + Extended representation](recordings/mlp_sarsa__extended.gif)
+![Double DQN + Extended representation](recordings/double_dqn__extended.gif)
 
 *Double DQN with experience replay on the Extended (126d) representation — the strongest configuration (mean score 29.05, max 66).*
 

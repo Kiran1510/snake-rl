@@ -25,6 +25,16 @@ from snake_rl.utils.plotting import (
 FIGURES_DIR = "figures"
 
 
+def _output_name(name: str) -> str:
+    """Translate algo identifier in OUTPUT filenames: mlp_sarsa → double_dqn.
+
+    The string 'mlp_sarsa' is preserved as the algo identifier in input data
+    (result JSONs, weight files, CLI args), but generated artifact filenames
+    use 'double_dqn' for accuracy.
+    """
+    return name.replace("mlp_sarsa", "double_dqn")
+
+
 def load_all_results(results_dir: str) -> dict:
     """Load all JSON result files from a directory."""
     results = {}
@@ -58,13 +68,13 @@ def generate_all_plots(results: dict, figures_dir: str):
     # 1. Individual learning curves
     print("\n--- Individual learning curves ---")
     for name, result in results.items():
-        save_path = os.path.join(figures_dir, f"learning_curve_{name}.png")
+        save_path = os.path.join(figures_dir, f"learning_curve_{_output_name(name)}.png")
         plot_learning_curve(result, window=100, save_path=save_path)
 
     ALGO_DISPLAY = {
         "linear_sarsa": "Linear FA",
         "tile_sarsa":   "Tile Coding",
-        "mlp_sarsa":    "MLP",
+        "mlp_sarsa":    "Double DQN",
     }
     REP_DISPLAY = {
         "compact":  "Compact (11d)",
@@ -88,7 +98,7 @@ def generate_all_plots(results: dict, figures_dir: str):
             labels = [REP_DISPLAY.get(r.config.representation, r.config.representation)
                       for r in algo_results]
             display = ALGO_DISPLAY.get(algo, algo)
-            save_path = os.path.join(figures_dir, f"comparison_{algo}.png")
+            save_path = os.path.join(figures_dir, f"comparison_{_output_name(algo)}.png")
             plot_comparison(
                 algo_results, labels=labels,
                 title=f"{display} — Score by Representation",

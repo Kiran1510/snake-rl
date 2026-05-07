@@ -203,7 +203,7 @@ def plot_comparison_by_representation(
     ALGO_LABELS = {
         "linear_sarsa": "Linear FA",
         "tile_sarsa":   "Tile Coding",
-        "mlp_sarsa":    "MLP",
+        "mlp_sarsa":    "Double DQN",
     }
     REP_TITLES = {
         "compact":  "Compact (11d)",
@@ -259,7 +259,7 @@ def plot_final_performance_table(
     ALGO_LABELS = {
         "linear_sarsa": "Linear FA",
         "tile_sarsa":   "Tile Coding",
-        "mlp_sarsa":    "MLP",
+        "mlp_sarsa":    "Double DQN",
     }
     REP_ORDER = ["compact", "local", "extended"]
     ALGO_ORDER = ["linear_sarsa", "tile_sarsa", "mlp_sarsa"]
@@ -326,7 +326,7 @@ def plot_performance_heatmap(
     ALGO_LABELS = {
         "linear_sarsa": "Linear FA",
         "tile_sarsa":   "Tile Coding",
-        "mlp_sarsa":    "MLP",
+        "mlp_sarsa":    "Double DQN",
     }
     REP_LABELS = {
         "compact":  "Compact\n(11d)",

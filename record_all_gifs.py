@@ -92,7 +92,8 @@ def record_one_gif(algo, rep_name, n_episodes=3, max_steps_per_ep=300, fps=10, s
     pygame.quit()
 
     if frames:
-        filepath = os.path.join(RECORDINGS_DIR, f"{algo}_sarsa__{rep_name}.gif")
+        algo_label = "double_dqn" if algo == "mlp" else f"{algo}_sarsa"
+        filepath = os.path.join(RECORDINGS_DIR, f"{algo_label}__{rep_name}.gif")
         frames[0].save(
             filepath,
             save_all=True,
