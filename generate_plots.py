@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from snake_rl.utils.experiment import load_results, ExperimentResult
 from snake_rl.utils.plotting import (
     plot_learning_curve,
-    plot_reward_curve,
     plot_comparison,
     plot_comparison_by_representation,
     plot_final_performance_table,
