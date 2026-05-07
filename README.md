@@ -300,7 +300,7 @@ agent.initialize(env)
 #### Key Design Decisions
 
 - **Alpha divided by n_tilings:** Following the standard convention (Sutton & Barto, 2018, §9.5.4), the learning rate is internally divided by the number of tilings. The user-facing `alpha` parameter is the "effective" rate.
-- **Hash-based indexing:** Naive tile coding on 109+ dimensions would require astronomically large index tables. The hash function compresses this to a fixed-size table (default 65536), with rare collisions as a trade-off.
+- **Hash-based indexing:** Naive tile coding on 109+ dimensions would require astronomically large index tables. The hash function compresses this to a fixed-size table (default 262,144), with rare collisions as a trade-off.
 - **Feature normalization:** The `TileCodingRepresentation` wrapper normalizes all input features to [0, 1] before tiling. Ranges are estimated by sampling random states during `agent.initialize(env)`.
 - **Sparse weight updates:** Only the weights at active tile indices (one per tiling) are updated each step, making updates very efficient.
 
@@ -314,19 +314,28 @@ The tile coding system has three layers:
 
 ### Algorithm 3: MLP SARSA (`snake_rl/agents/mlp_sarsa.py`)
 
-The action-value function is approximated by a single hidden layer MLP:
+The action-value function is approximated by a two-hidden-layer MLP:
 
 ```
-q̂(s; θ) = W₂ · ReLU(W₁ · x(s) + b₁) + b₂
+q̂(s; θ) = W₃ · ReLU(W₂ · ReLU(W₁ · x(s) + b₁) + b₂) + b₃
 ```
 
-The network takes state features as input and outputs Q-values for all 3 actions simultaneously. The semi-gradient SARSA update uses backpropagation:
+The network takes state features as input and outputs Q-values for all 3 actions simultaneously. Rather than on-policy SARSA, this agent uses **Q-learning with experience replay and a target network** — a deliberate departure from the linear methods motivated by the instability of semi-gradient updates with nonlinear function approximation.
+
+#### Key Design Decisions
+
+- **Experience replay (50k buffer, batch size 64):** Transitions are stored at every step and random mini-batches are sampled for each gradient update. Breaks temporal correlation between updates and provides ~50× more gradient updates per episode than naive online learning.
+- **Double DQN target:** The online network selects the greedy next action; the target network scores it. Decouples action selection from evaluation, eliminating the systematic Q-value overestimation of standard DQN.
 
 ```
-θ ← θ + α [R + γ q̂(S')_A' - q̂(S)_A] ∇_θ q̂(S)_A
+target = R + γ · Q_target(S', argmax_a Q_online(S', a))
 ```
 
-Implemented as MSE loss on the TD error with gradient clipping (max norm 10.0).
+- **Target network:** Hard-copied from the online network every 100 episodes. Prevents the moving-target instability that arises when bootstrapping against a rapidly changing function approximator.
+- **Huber loss (smooth L1):** Replaces MSE. Quadratic for small TD errors, linear for large ones — prevents early noisy TD spikes from dominating gradients.
+- **Gradient clipping:** `max_norm=5.0`.
+- **Adam optimizer:** Learning rate 0.001.
+- **Potential-based reward shaping:** Training wraps the environment with `DistanceShapingWrapper` (shaping factor 0.5), adding `0.5 × (prev_dist − curr_dist)` per step, skipped on food eat. Provides dense signal during exploration without changing the optimal policy (Ng et al., 1999).
 
 ```python
 from snake_rl.agents.mlp_sarsa import MLPSarsaAgent
@@ -335,40 +344,36 @@ from snake_rl.representations import CompactRepresentation
 rep = CompactRepresentation()
 agent = MLPSarsaAgent(
     representation=rep,
-    hidden_dim=128,           # hidden layer units
+    hidden_dims=(256, 128),   # two hidden layers
     alpha=0.001,              # Adam learning rate
     gamma=0.95,
     epsilon=1.0,
-    use_target_network=False, # add if training is unstable
-    target_update_freq=100,   # episodes between target net syncs
+    buffer_capacity=50_000,
+    batch_size=64,
+    target_update_freq=100,
     seed=42,
 )
 ```
-
-#### Key Design Decisions
-
-- **Deliberately simple architecture:** One hidden layer, 128 units, ReLU. No deep networks — the goal is to isolate the effect of nonlinear function approximation, not to maximize performance.
-- **Adam optimizer:** Standard choice for neural network training. Learning rate default 0.001.
-- **Gradient clipping:** `max_norm=10.0` to prevent gradient explosions during semi-gradient updates.
-- **Optional target network:** Disabled by default to maintain closest comparison with the linear methods. If training instability arises (which the deadly triad analysis predicts is possible), enable it with `use_target_network=True`. The target network is updated every `target_update_freq` episodes. *If the MLP requires stabilization techniques that linear methods don't, that's a meaningful finding about the cost of nonlinear approximation.*
-- **No experience replay by default:** Keeps the method on-policy (true SARSA). Experience replay would make it off-policy and reintroduce the third leg of the deadly triad.
-- **CPU only:** Snake is not compute-intensive enough to benefit from GPU acceleration.
 
 #### Network Architecture
 
 For the compact representation (11 input features):
 
 ```
-Input (11) → Linear (11 × 128) → ReLU → Linear (128 × 3) → Output (3)
-Total parameters: 1,923
+Input (11) → Linear(11→256) → ReLU → Linear(256→128) → ReLU → Linear(128→3)
+Total parameters: 36,099
 ```
 
 For the extended representation (126 input features):
 
 ```
-Input (126) → Linear (126 × 128) → ReLU → Linear (128 × 3) → Output (3)
-Total parameters: 16,643
+Input (126) → Linear(126→256) → ReLU → Linear(256→128) → ReLU → Linear(128→3)
+Total parameters: 65,667
 ```
+
+#### Note on the Deadly Triad
+
+Experience replay makes this agent off-policy, reintroducing the third leg of the deadly triad (function approximation + bootstrapping + off-policy learning). The target network and Double DQN mitigate the resulting instability empirically. This is a deliberate trade-off: the replay buffer provides ~50× more gradient updates per episode, which outweighs the theoretical cost at this scale.
 
 ---
 
@@ -458,24 +463,23 @@ A hand-coded policy that moves toward food while avoiding immediate danger. Repr
 
 ---
 
-## Early Results
+## Results
 
-Preliminary training runs on a 10×10 grid already reveal interesting patterns:
+Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean score averaged over the final 1,000 episodes.
 
-| Agent | Compact Representation | Notes |
-|---|---|---|
-| Random baseline | 0.15 avg | Lower bound |
-| Linear FA SARSA (5k ep) | 0.17 → 0.70 | Learns danger avoidance, struggles with food-seeking |
-| Tile Coding SARSA (3k ep) | 0.25 → 8.99 | Dramatically better generalization |
-| Greedy heuristic | 22.89 avg | Upper reference |
+| | Compact (11d) | Local (109d) | Extended (126d) |
+|---|---|---|---|
+| **Linear FA** | 0.80 ± 0.07 | 0.67 ± 0.03 | 3.90 ± 0.98 |
+| **Tile Coding** | 22.69 ± 0.54 | 3.21 ± 0.17 | 1.32 ± 0.03 |
+| **MLP** | *in progress* | *in progress* | *in progress* |
 
-### Key Observations So Far
+### Key Findings
 
-**Linear FA learns danger avoidance but little else on compact features.** The learned weights show danger signals with weights of -8.x — the agent strongly avoids collisions. But the food-direction weights are small and noisy, and the agent struggles to translate "food is to the right" into effective navigation under a linear model. Under pure greedy evaluation (ε=0), the policy degenerates into deterministic loops.
+**Tile coding's performance degrades sharply with dimensionality.** Tile × compact (22.69) outperforms tile × local (3.21) by ~7× and tile × extended (1.32) by ~17×. Hash-based tile coding was designed for low-dimensional continuous spaces; at 109+ dimensions, hash collisions in the fixed-size table (262,144 entries) dominate and generalization breaks down. Extended actually performs *worse* than local despite having more information — more dimensions means more collisions.
 
-**Tile coding dramatically outperforms hand-crafted linear features.** Going from 0.70 to 8.99 average score on the same compact representation is a major improvement. Tile coding's overlapping tilings create a richer feature space that enables better generalization between similar states — nearby states share most active tiles, providing smooth value function approximation that hand-crafted binary features can't achieve.
+**Linear FA benefits from richer representations.** Extended (3.90) is ~5× better than compact (0.80) for linear FA, because the extended representation explicitly encodes interaction terms that a linear model cannot learn on its own. The interaction features (danger × food direction products) are doing real work.
 
-**The full 3×3 experimental matrix has not been run yet.** These early numbers are from initial development and tuning. The richer representations (local neighborhood, extended) and the MLP are expected to show further differences.
+**Linear FA learns danger avoidance reliably.** The learned weights show danger signals at -8.x — the agent strongly avoids collisions. Food-direction weights are smaller and noisier, and under pure greedy evaluation (ε=0) the policy can degenerate into deterministic loops on compact features.
 
 ---
 
@@ -522,15 +526,17 @@ Five plot functions, all save to file and return the matplotlib figure:
 
 ---
 
-## Experimental Matrix (Planned)
+## Experimental Setup
+
+Full 3×3 matrix: 20,000 episodes × 5 random seeds × 9 configurations, 20×20 grid. Plus baselines (random, greedy heuristic) and a tabular Q-learning demonstration showing where tabular methods break down.
 
 | | Compact (11d) | Local (109d) | Extended (126d) |
 |---|---|---|---|
-| **Linear FA** | Config 1 | Config 2 | Config 3 |
-| **Tile Coding** | Config 4 | Config 5 | Config 6 |
-| **MLP** | Config 7 | Config 8 | Config 9 |
+| **Linear FA** | α=0.01 | α=0.01 | α=0.01 |
+| **Tile Coding** | α=0.05, 8 tilings | α=0.05, 4 tilings | α=0.05, 4 tilings |
+| **MLP** | α=0.001, (256,128) | α=0.001, (256,128) | α=0.001, (256,128) |
 
-Each configuration: 10,000 episodes × 5 random seeds. Plus baselines (random, greedy heuristic) and a brief tabular Q-learning demonstration showing where tabular methods break down.
+Tile coding uses fewer tilings for local/extended representations (4 vs 8) because the higher dimensionality already provides sufficient coverage with a 262,144-entry hash table.
 
 ---
 
