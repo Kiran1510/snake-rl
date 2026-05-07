@@ -15,13 +15,13 @@ This project investigates how different **state representations** interact with 
 
 The central research question:
 
-> *Given state representations of varying complexity, how do hand-crafted linear features, automatically constructed tile-coded features, and neural network-learned features compare in their ability to learn effective control policies via on-policy temporal-difference learning?*
+> *Given state representations of varying complexity, how do hand-crafted linear features, automatically constructed tile-coded features, and neural network-learned features compare in their ability to learn effective control policies?*
 
-The project compares **three function approximation approaches** — linear function approximation with hand-crafted features, tile coding, and a small MLP — across **three state representations** of increasing complexity, all using semi-gradient SARSA as the underlying control algorithm. This isolates the function approximation method as the primary experimental variable.
+The project compares **three function approximation approaches** — linear function approximation with hand-crafted features, tile coding, and a Double DQN neural network with experience replay — across **three state representations** of increasing complexity. The linear and tile coding agents use on-policy semi-gradient SARSA; the neural network uses off-policy Double DQN with a target network to handle the instability of nonlinear function approximation. This isolates the function approximation method as the primary experimental variable.
 
 ### Why This Matters
 
-Most existing Snake RL work uses off-policy DQN with a single state representation. No prior work has systematically compared function approximation methods across multiple representations under a common on-policy TD framework. This project fills that gap, with theoretical grounding in the convergence guarantees of linear TD methods (Tsitsiklis & Van Roy, 1997) and the deadly triad framework (Sutton & Barto, 2018).
+Most existing Snake RL work uses off-policy DQN with a single state representation. No prior work has systematically compared function approximation methods across multiple representations using a common experimental framework. This project fills that gap, with theoretical grounding in the convergence guarantees of linear TD methods (Tsitsiklis & Van Roy, 1997) and the deadly triad framework (Sutton & Barto, 2018).
 
 ### The best agent in action
 
@@ -506,7 +506,7 @@ Full experimental matrix: 20,000 episodes × 5 random seeds, 20×20 grid. Mean s
 
 **Tile coding's performance degrades sharply with dimensionality.** Tile × compact (22.69) outperforms tile × local (3.21) by ~7× and tile × extended (1.32) by ~17×. Hash-based tile coding was designed for low-dimensional continuous spaces; at 109+ dimensions, hash collisions in the fixed-size table (262,144 entries) dominate and generalization breaks down. Extended actually performs *worse* than local despite having more information — more dimensions means more collisions.
 
-**MLP is representation-agnostic; tile coding is not.** MLP scores (24.26 / 22.51 / 29.05) are competitive across all three representations. Tile coding's scores collapse monotonically with dimensionality (22.69 → 3.21 → 1.32). The gap is starkest on extended: MLP (29.05) vs tile coding (1.32) — a 22× difference on the same representation.
+**MLP is more robust to representation choice than tile coding.** MLP scores (24.26 / 22.51 / 29.05) stay competitive across all three representations. Tile coding's scores collapse monotonically with dimensionality (22.69 → 3.21 → 1.32). The gap is starkest on extended: MLP (29.05) vs tile coding (1.32) — a 22× difference on the same representation.
 
 **MLP variance tightens with richer representations.** Seed-to-seed std narrows from ±0.39 (compact) to ±0.32 (extended) — the richer feature space provides a more stable learning signal for the network.
 
