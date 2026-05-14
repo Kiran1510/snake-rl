@@ -586,8 +586,8 @@ Tile coding uses fewer tilings for local/extended representations (4 vs 8) becau
 ### Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/snake-rl.git
-cd snake-rl
+git clone https://github.com/Kiran1510/rl-function-approximation-benchmark.git
+cd rl-function-approximation-benchmark
 pip install -r requirements.txt
 ```
 
